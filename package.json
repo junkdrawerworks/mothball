@@ -1,0 +1,9 @@
+{
+  "name": "mothball",
+  "private": true,
+  "type": "module",
+  "description": "Tap a tote: what's inside, and how to bring it all back up.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs && node test/e2e.mjs"
+  }
+}
