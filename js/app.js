@@ -1,6 +1,6 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
 import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, ageText, qrSvg, today, lines } from './kit/ui.js';
-import { Ledger, takeConnectLink } from './kit/ledger.js';
+import { Ledger, takeConnectLink, refusal, importText } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
@@ -47,11 +47,14 @@ function importFile() {
     try {
       const data = JSON.parse(await input.files[0].text());
       let n = 0;
+      const skipped = {};
       for (const [coll, list] of [['builds', data.builds], ['totes', data.totes]]) for (const d of list || []) {
-        if (!d || !d.id) continue;
-        ledger.put(coll, { ...(ledger.doc(coll, d.id) || {}), ...d }); n++;
+        if (!d) continue;
+        const rec = { ...(ledger.doc(coll, d.id) || {}), ...d }, why = refusal(rec);
+        if (why) { skipped[why] = (skipped[why] || 0) + 1; continue; }
+        ledger.put(coll, rec); n++;
       }
-      toast(`Imported ${n} records.`); render();
+      toast(importText(n, skipped), Object.keys(skipped).length ? 'bad' : ''); render();
     } catch { toast('That file isn\'t a Mothball import.', 'bad'); }
   });
   input.click();

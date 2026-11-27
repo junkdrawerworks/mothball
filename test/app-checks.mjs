@@ -30,6 +30,13 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.match(await page.locator('.label-num').innerText(), /01/);
   await page.goto(base + '?demo#/builds');
   assert.equal(await page.locator('.list .row').count(), 3);
+  // an import with a record the ledger would refuse: the rest go in, and the toast says what was left out
+  await page.goto(base + '?demo');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('text=Import')]);
+  await chooser.setFiles({ name: 'totes.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ totes: [{ id: 'Tree topper', name: 'A name, not a number' }, { id: '07', name: 'Garlands', season: 'christmas' }] })) });
+  await page.waitForSelector('.toast.show >> text=Imported 1, skipped 1 with a bad id.');
+  await page.waitForSelector('.row >> text=Garlands');
 
   await ledgerChecks({ page, ctx, base, assert, problems });
 }
@@ -43,6 +50,7 @@ async function ledgerChecks({ page, ctx, base, assert, problems }) {
   let mode = 'down';
   await page.route('https://script.google.com/**', route => (mode === 'up'
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify(google.handle(JSON.parse(route.request().postData() || '{}'))) })
+    : mode === 'badkey' ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'bad key' }) })
     : route.abort('internetdisconnected')));
   await page.goto(base);
   await page.evaluate(() => localStorage.setItem('mothball.ledger', JSON.stringify({ url: 'https://script.google.com/macros/s/AKfyTEST/exec', key: 'k'.repeat(40) })));
@@ -61,6 +69,12 @@ async function ledgerChecks({ page, ctx, base, assert, problems }) {
   await page.waitForFunction(() => !/waiting|Saving/.test(document.querySelector('#sync').textContent), null, { timeout: 4000 });
   assert.ok(Date.now() - t0 < 4000);
   assert.ok(google.store['mothball.totes']['04'].unpacked, 'the change reached the ledger');
+  // the key changed (setup run again): the line says so, not "Offline"
+  mode = 'badkey';
+  await page.goto('about:blank');
+  await page.goto(base);
+  await page.waitForFunction(() => document.querySelector('#sync').textContent === 'Wrong key — connect again from Switchboard');
+  assert.equal(await page.locator('#sync.badkey').count(), 1);
   mode = 'refuse';
   await page.evaluate(() => localStorage.clear());
   await page.goto(base);
