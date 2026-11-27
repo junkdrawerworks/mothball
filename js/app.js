@@ -85,7 +85,8 @@ function renderTote(t) {
     h('div', { class: 'tape-wrap' }, h('span', { class: 'tape-cap' }, `Tote ${t.id} · ${seasonName(t.season)}`), h('div', { class: 'tape' }, t.name)),
     h('p', { class: 'where' }, h('b', {}, 'Lives: '), t.place || 'not set', t.box ? ` · moving box ${t.box}` : ''),
     h('p', { class: 'muted' }, out ? (t.unpacked ? `Out since ${dayText(t.unpacked)}.` : 'Out.') : t.packed ? `Packed ${dayText(t.packed)}.` : 'Not packed yet.'),
-    t.note ? h('div', { class: 'notice warn note' }, h('p', {}, h('b', {}, 'Note from last time: '), t.note)) : null,
+    t.note ? h('div', { class: 'notice warn note' }, h('p', {}, h('b', {}, 'Note from last time: '), t.note),
+      h('p', { class: 'done' }, h('button', { type: 'button', class: 'linkish', onclick: () => noteDone(t) }, 'Done'))) : null,
     h('h2', {}, 'In this tote'),
     items.length ? h('ul', { class: 'list checks' }, items.map((it, i) => {
       const k = t.id + ':' + i;
@@ -118,6 +119,12 @@ function unpacked(t) {
   ledger.put('totes', { ...(tote(t.id) || t), unpacked: today(), out: true });
   toast(`Tote ${t.id} is out.`); render();
 }
+// The note was seen to (the new supply bought): it goes, after a yes.
+async function noteDone(t) {
+  if (!await confirmSheet('Clear the note?', `"${t.note}" goes. A new one can go in Edit, or when you pack it.`, 'Clear it')) return;
+  ledger.put('totes', { ...(tote(t.id) || t), note: '' });
+  toast('Note cleared.'); render();
+}
 
 async function editTote(t) {
   const exists = !!(t && tote(t.id));
@@ -127,6 +134,7 @@ async function editTote(t) {
     { name: 'season', label: 'Season', type: 'select', value: t?.season || 'christmas', options: SEASONS.map(s => [s[0], s[1]]) },
     { name: 'place', label: 'Where it lives', value: t?.place, placeholder: 'Garage, top shelf, left' },
     { name: 'items', label: 'Contents (one per line)', type: 'textarea', rows: 6, value: (t?.items || []).join('\n') },
+    { name: 'note', label: 'Note to next year', type: 'textarea', rows: 3, value: t?.note, placeholder: 'What broke, what you ran out of, what to buy before it comes out again.' },
     { name: 'builds', label: 'Build cards inside (comma-separated ids)', value: (t?.builds || []).join(', '), hint: builds().length ? 'Cards: ' + builds().map(b => b.id).join(', ') : 'Make cards under Build cards.' },
     { name: 'box', label: 'Moving box number', value: t?.box, hint: 'From Manifest, while it travels.' },
   ] });
@@ -137,7 +145,7 @@ async function editTote(t) {
   }
   const id = (v.id || nextNumber()).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12) || nextNumber();
   if ((!exists || t.id !== id) && tote(id)) { toast(`There's already a tote ${id}.`, 'bad'); return; }
-  const doc = { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box,
+  const doc = { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note,
     items: lines(v.items), builds: v.builds.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
   if (exists && t.id !== id) ledger.del('totes', t.id);
   ledger.put('totes', doc);

@@ -35,6 +35,19 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('text=‹ All totes');
   await page.waitForSelector('.row .num');
   assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'out');
+  // tote 01: the note to next year is in Edit, and Done clears it
+  await page.click('text=Animated hand and hanging skeleton');
+  await page.click('#app button:text-is("Edit")');
+  assert.match(await page.locator('#f-note').inputValue(), /^The ring finger tendon frayed/);
+  await page.fill('#f-note', 'Bring braided line.');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('.note >> text=Bring braided line.');
+  await page.click('.note >> text=Done');
+  await page.click('dialog >> text=Clear it');
+  await page.waitForSelector('.toast.show >> text=Note cleared.');
+  assert.equal(await page.locator('.note').count(), 0);
+  assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '01').note), '');
+  await page.click('text=‹ All totes');
   // the season notice, on Nov 27: one tote reads as one, and it goes once the tote is down
   const nov = await ctx.newPage();
   await nov.clock.setFixedTime(new Date(2026, 10, 27, 12));
