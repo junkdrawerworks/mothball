@@ -34,7 +34,7 @@ function renderHome() {
           h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, t.place || 'No shelf yet')),
           h('span', { class: 'meta' }, t.unpacked && (!t.packed || t.unpacked > t.packed) ? 'out' : t.packed ? 'packed ' + ageText(t.packed) + ' ago' : '')))))) : null;
     }),
-    !list.length ? h('p', { class: 'empty' }, 'No totes yet.') : null,
+    !list.length ? h('p', { class: 'empty' }, ledger.notReady('totes') || 'No totes yet.') : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote(null) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),
       h('button', { type: 'button', class: 'btn ghost', onclick: importFile }, 'Import')),
   ];
@@ -207,9 +207,9 @@ function render() {
   else if (r.view === 'build') { const b = build(r.arg); body = b ? renderBuild(b) : [h('p', { class: 'empty' }, 'No such card.')]; }
   else if (r.view === 'label') { const t = tote(r.arg); body = t ? renderLabel(t) : [h('p', { class: 'empty' }, 'No such tote.')]; }
   else if (r.view === 'item') {
-    const t = tote(r.id);
-    body = t ? renderTote(t) : [h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')), h('p', { class: 'empty' }, ledger.has('totes') ? `No tote ${r.id} yet.` : 'Loading…'),
-      ledger.has('totes') ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {}) }, `Set up tote ${r.id}`)) : null];
+    const t = tote(r.id), wait = ledger.notReady('totes');
+    body = t ? renderTote(t) : [h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')), h('p', { class: 'empty' }, wait || `No tote ${r.id} yet.`),
+      !wait ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {}) }, `Set up tote ${r.id}`)) : null];
   } else body = renderHome();
   mount(app, body);
   const st = $('#sync'); st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText();
@@ -219,6 +219,6 @@ function render() {
 window.addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
 ledger.on(() => { const st = $('#sync'); if (st) { st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText(); } });
 render();
-if (ledger.connected) ledger.sync(['totes', 'builds']).then(render);
+ledger.keepUp(['totes', 'builds'], render);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 window.__mothball = { ledger, render };

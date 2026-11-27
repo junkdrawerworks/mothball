@@ -1,6 +1,6 @@
 // Mothball's own checks, run by test/e2e.mjs on a phone-sized page.
 const fakeNfc = () => { window.__nfc = { writes: [] }; window.NDEFReader = class { async write(m) { window.__nfc.writes.push(m.records[0].data); } async scan() {} }; };
-export async function appChecks({ page, base, assert }) {
+export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.match(await page.locator('#app').innerText(), /connect first/i);
   await page.addInitScript(fakeNfc);
   await page.goto(base + '?demo');
@@ -30,4 +30,39 @@ export async function appChecks({ page, base, assert }) {
   assert.match(await page.locator('.label-num').innerText(), /01/);
   await page.goto(base + '?demo#/builds');
   assert.equal(await page.locator('.list .row').count(), 3);
+
+  await ledgerChecks({ page, ctx, base, assert, problems });
+}
+
+// Connected to a pretend ledger (the kit's own DemoLedger behind script.google.com), which goes down and comes back.
+// Every request to Google is answered here: the route stays in place, refusing, once these checks are done.
+async function ledgerChecks({ page, ctx, base, assert, problems }) {
+  const from = problems.length;
+  const { DemoLedger } = await import(new URL('../js/kit/ledger.js', import.meta.url));
+  const google = new DemoLedger({ 'mothball.totes': [{ id: '04', name: 'Wreaths', season: 'christmas', items: ['Front door wreath'] }] });
+  let mode = 'down';
+  await page.route('https://script.google.com/**', route => (mode === 'up'
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify(google.handle(JSON.parse(route.request().postData() || '{}'))) })
+    : route.abort('internetdisconnected')));
+  await page.goto(base);
+  await page.evaluate(() => localStorage.setItem('mothball.ledger', JSON.stringify({ url: 'https://script.google.com/macros/s/AKfyTEST/exec', key: 'k'.repeat(40) })));
+  // a new phone, connected while Google can't be reached: a tapped sticker says so, then opens by itself
+  await page.goto('about:blank');
+  await page.goto(base + '#04');
+  await page.waitForSelector("text=Can't reach the ledger yet");
+  mode = 'up';
+  await page.waitForSelector('.tape >> text=Wreaths', { timeout: 12000 });
+  // a change made with no signal goes as soon as the signal is back, without another change or a reload
+  await ctx.setOffline(true); mode = 'down';           // (a route answers even with the browser offline)
+  await page.click('text=I unpacked it');
+  await page.waitForFunction(() => /waiting/.test(document.querySelector('#sync').textContent));
+  mode = 'up'; await ctx.setOffline(false);
+  const t0 = Date.now();
+  await page.waitForFunction(() => !/waiting|Saving/.test(document.querySelector('#sync').textContent), null, { timeout: 4000 });
+  assert.ok(Date.now() - t0 < 4000);
+  assert.ok(google.store['mothball.totes']['04'].unpacked, 'the change reached the ledger');
+  mode = 'refuse';
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(base);
+  for (let i = problems.length - 1; i >= from; i--) if (/script\.google\.com|Failed to load resource: net::ERR_INTERNET_DISCONNECTED/.test(problems[i])) problems.splice(i, 1);
 }
