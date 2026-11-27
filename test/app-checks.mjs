@@ -159,6 +159,10 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await secondDevice({ ctx, base, assert });
   await stickerPage({ ctx, base, assert });
   await renumberChecks({ page, base, assert });
+  // Back from a tote 40 rows down lands where the list was
+  const { backKeepsPlace } = await import('./kit-checks.mjs');
+  await backKeepsPlace({ browser: ctx.browser(), base, assert, app: 'mothball', colls: { builds: [],
+    totes: Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1).padStart(2, '0'), name: `Tote of things ${i + 1}`, season: 'christmas', place: 'Garage', items: [], builds: [] })) } });
 }
 
 // A Save the app refuses (a number another tote has) keeps the sheet open with everything typed, says why above the

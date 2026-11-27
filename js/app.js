@@ -1,5 +1,5 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
-import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held, sampleLink } from './kit/ui.js';
+import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held, sampleLink, onRoute } from './kit/ui.js';
 import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
@@ -250,7 +250,7 @@ function render() {
   document.title = r.view === 'item' && tote(r.id) ? `Tote ${r.id} · Mothball` : 'Mothball';
 }
 
-window.addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
+onRoute(render);
 ledger.on(() => { const st = $('#sync'); if (st) { st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText(); } });
 render();
 ledger.keepUp(COLLS, render);
