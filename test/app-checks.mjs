@@ -2,6 +2,7 @@
 const fakeNfc = () => { window.__nfc = { writes: [] }; window.NDEFReader = class { async write(m) { window.__nfc.writes.push(m.records[0].data); } async scan() {} }; };
 export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.match(await page.locator('#app').innerText(), /connect first/i);
+  assert.equal(await page.locator('#sync').isVisible(), false, 'a lone status dot under the name on the Connect first screen');
   await page.addInitScript(fakeNfc);
   await page.goto(base + '?demo');
   await page.waitForSelector('.row .num');
@@ -31,6 +32,17 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.fill('#f-items', 'Front door wreath\nWreath hanger');
   await page.click('dialog >> button[type=submit]');
   await page.waitForSelector('.tape >> text=Wreaths');
+  // long things fit the phone: a pasted link in the note to next year, a long tote number in its badge
+  await page.evaluate(() => { window.__mothball.ledger.put('totes', { id: '2026-xmas', name: 'Spare lights', season: 'christmas', items: [], builds: [],
+    note: 'https://example.com/averyverylonglinkwithnospacesorhyphensthatkeepsgoingandgoingpasttheedgeofthephone' }); });
+  await page.goto(base + '?demo#2026-xmas');
+  await page.waitForSelector('.note');
+  assert.equal(await page.locator('.note').evaluate(el => el.scrollWidth <= el.clientWidth), true, 'a long link runs out of the note');
+  await page.evaluate(() => { location.hash = ''; });   // the same page: the sample keeps the new tote
+  await page.waitForSelector('.row .num');
+  const badge = await page.locator('.row', { hasText: 'Spare lights' }).locator('.num').evaluate(el => [el.scrollWidth <= el.clientWidth, el.getBoundingClientRect().width]);
+  assert.equal(badge[0], true, 'a long tote number runs out of its badge');
+  assert.ok(badge[1] >= 46, 'the badge got narrower than 46 px');
   await page.goto(base + '?demo#/label/01');
   await page.waitForSelector('.label-qr svg');
   assert.match(await page.locator('.label-num').innerText(), /01/);

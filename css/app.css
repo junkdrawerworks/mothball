@@ -3,7 +3,7 @@
 @media (prefers-color-scheme: dark) { :root { --accent: #CDBEF2; --accent-ink: #1E1830; --tape: #6E5A9E; --tape-edge: #2C2244; } }
 .crumb { margin: 0 0 8px; font-size: 15px; } .crumb a { color: var(--ink2); text-decoration: none; }
 .where { margin: -4px 0 2px; }
-.row .num { flex: none; width: 46px; height: 46px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 24px/1 var(--display); }
+.row .num { flex: none; min-width: 46px; width: auto; padding: 0 6px; height: 46px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 24px/1 var(--display); }
 .row.check { cursor: pointer; } .row.check input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 .small { font-size: 14px; margin-top: -6px; }
 details.build summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 19px; list-style: none; }
