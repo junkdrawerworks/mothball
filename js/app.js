@@ -1,12 +1,12 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
 import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, ageText, qrSvg, today, lines } from './kit/ui.js';
-import { Ledger, takeConnectLink, refusal, importText } from './kit/ledger.js';
+import { Ledger, watchConnectLinks, refusal, importText } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
-takeConnectLink('mothball');
+watchConnectLinks('mothball', toast);
 const ledger = new Ledger('mothball', { demo: demo ? SAMPLE : null });
 const app = $('#app');
 const checked = new Set(); // contents ticked while unpacking: this visit only
