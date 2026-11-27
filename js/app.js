@@ -1,5 +1,5 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
-import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, ageText, qrSvg, today, lines } from './kit/ui.js';
+import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines } from './kit/ui.js';
 import { Ledger, watchConnectLinks, refusal, importText } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
@@ -32,7 +32,7 @@ function renderHome() {
         h('li', {}, h('a', { class: 'row', href: '#' + t.id },
           h('span', { class: 'num' }, t.id),
           h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, t.place || 'No shelf yet')),
-          h('span', { class: 'meta' }, t.unpacked && (!t.packed || t.unpacked > t.packed) ? 'out' : t.packed ? 'packed ' + ageText(t.packed) + ' ago' : '')))))) : null;
+          h('span', { class: 'meta' }, t.unpacked && (!t.packed || t.unpacked > t.packed) ? 'out' : t.packed ? 'packed ' + agoText(t.packed) : '')))))) : null;
     }),
     !list.length ? h('p', { class: 'empty' }, ledger.notReady('totes') || 'No totes yet.') : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote(null) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),

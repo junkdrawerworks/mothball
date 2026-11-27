@@ -20,6 +20,10 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.fill('#f-note', 'Buy a spare USB-C supply.');
   await page.click('dialog >> button[type=submit]');
   await page.waitForSelector('.note >> text=spare USB-C');
+  // packed today reads that way at home, not "packed today ago"
+  await page.click('text=‹ All totes');
+  await page.waitForSelector('.row .num');
+  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'packed today');
   // a new tote, set up from a tag that isn't in the list yet
   await page.goto(base + '?demo#05');
   await page.click('text=Set up tote 05');
