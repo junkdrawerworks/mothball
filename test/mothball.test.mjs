@@ -42,20 +42,20 @@ test('a tick stays on its thing when the list changes', () => {
 
 test('an import only fills in: contents, notes and a card typed at the tote stay, and a deleted tote stays deleted', () => {
   const here = {
-    'totes/01': { id: '01', name: 'Porch lights', season: 'christmas', items: ['Light strings (4)', 'Timer plug'], builds: ['rink'], place: 'Garage, top shelf',
+    'totes/01': { id: '01', name: 'Porch lights', season: 'christmas', items: ['Light strings (4)', 'Timer plug'], builds: ['sleigh'], place: 'Garage, top shelf',
       packed: '2026-01-06', note: 'Buy a new bag of clips.' },
-    'builds/rink': { id: 'rink', name: 'Skating rink', season: 'christmas', firmware: 'v1.3', power: '12 V 2 A', wifi: '', bringup: 'Plug in the base' },
+    'builds/sleigh': { id: 'sleigh', name: 'Light-up sleigh', season: 'christmas', firmware: 'v1.3', power: '12 V 2 A', wifi: '', bringup: 'Plug in the base' },
   };
-  const file = { builds: [{ id: 'rink', name: 'Skating rink', season: 'christmas', firmware: '', power: '', wifi: 'Rink-AP: hold the button 5 s', bringup: 'Plug in the base' },
-      { id: 'skeleton-hand', name: 'Skeleton hand', season: 'halloween' }],
-    totes: [{ id: '01', name: 'Porch lights', season: 'christmas', items: [], builds: ['rink', 'Skeleton-Hand'] }, { id: '06', name: 'Tree skirt' },
+  const file = { builds: [{ id: 'sleigh', name: 'Light-up sleigh', season: 'christmas', firmware: '', power: '', wifi: 'Sleigh-AP: hold the button 5 s', bringup: 'Plug in the base' },
+      { id: 'hanging-ghost', name: 'Hanging ghost', season: 'halloween' }],
+    totes: [{ id: '01', name: 'Porch lights', season: 'christmas', items: [], builds: ['sleigh', 'Hanging-Ghost'] }, { id: '06', name: 'Tree skirt' },
       { id: 'Tote 6', name: 'A name, not a number' }, { id: '05', name: 'Fans', items: 'Fan\n- Cooler\n\n' }, { id: '07', items: ['Wreath'] },
       { id: '08', name: 'Bad lines', items: [1, 2] }, { id: '09', name: 4 }, 'not a record'] };
   const { puts, res } = mergeImport(file, (c, id) => here[c + '/' + id], (c, id) => c === 'totes' && id === '06');
   const put = Object.fromEntries(puts.map(([c, d]) => [c + '/' + d.id, d]));
-  assert.deepEqual(Object.keys(put).sort(), ['builds/rink', 'builds/skeleton-hand', 'totes/01', 'totes/05']);
-  assert.deepEqual(put['builds/rink'], { ...here['builds/rink'], wifi: 'Rink-AP: hold the button 5 s' }, 'the blank firmware and power wiped what was typed');
-  assert.deepEqual(put['totes/01'], { ...here['totes/01'], builds: ['rink', 'skeleton-hand'] }, 'the contents, place, packed date or note went');
+  assert.deepEqual(Object.keys(put).sort(), ['builds/hanging-ghost', 'builds/sleigh', 'totes/01', 'totes/05']);
+  assert.deepEqual(put['builds/sleigh'], { ...here['builds/sleigh'], wifi: 'Sleigh-AP: hold the button 5 s' }, 'the blank firmware and power wiped what was typed');
+  assert.deepEqual(put['totes/01'], { ...here['totes/01'], builds: ['sleigh', 'hanging-ghost'] }, 'the contents, place, packed date or note went');
   assert.deepEqual(put['totes/05'].items, ['Fan', 'Cooler'], 'contents as a block of text');
   assert.deepEqual(res, { added: 2, filled: 2, kept: 2, gone: 1, skipped: ['id "Tote 6"', '"07" (no name)', '"08" (its contents aren\'t a list)', '"09" (its name isn\'t text)',
     'a line that isn\'t a record'] });
