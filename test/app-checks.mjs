@@ -112,6 +112,59 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.waitForSelector('.row >> text=Garlands');
 
   await ledgerChecks({ page, ctx, base, assert, problems });
+  await secondDevice({ ctx, base, assert });
+}
+
+// The laptop, connected while Google takes 3 s to answer its first list (a cold start), with the phone's tote 01 filled
+// in on the sheet: New tote and Import wait for the list, then New tote offers 02, and tote 01 keeps everything.
+async function secondDevice({ ctx, base, assert }) {
+  const { DemoLedger } = await import(new URL('../js/kit/ledger.js', import.meta.url));
+  const t01 = { id: '01', name: 'Porch lights', season: 'christmas', place: 'Garage, top shelf', items: ['Light strings (4)', 'Timer plug', 'Clips (bag)'],
+    builds: [], packed: '2026-11-27', out: false, note: 'Buy a new bag of clips.' };
+  const google = new DemoLedger({ 'mothball.totes': [t01] });
+  const laptop = await ctx.browser().newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  const errors = [];
+  laptop.on('page', p => p.on('pageerror', e => errors.push(e.message)));
+  try {
+    await laptop.route('https://script.google.com/**', async route => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      if (body.op === 'list') await new Promise(r => setTimeout(r, 3000));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(google.handle(body)) });
+    });
+    await laptop.addInitScript(() => { try { localStorage.getItem('mothball.ledger') || localStorage.setItem('mothball.ledger',
+      JSON.stringify({ url: 'https://script.google.com/macros/s/AKfyTEST/exec', key: 'k'.repeat(40) })); } catch {} });
+    const p = await laptop.newPage();
+    await p.goto(base);
+    await p.waitForSelector('.empty >> text=Loading…');
+    const off = () => p.locator('#app .btns button').evaluateAll(bs => bs.map(b => [b.textContent, b.disabled]));
+    assert.deepEqual(await off(), [['New tote', true], ['Import', true]], 'New tote or Import offered before the ledger answered');
+    await p.goto(base + '#/builds');
+    assert.equal(await p.locator('button', { hasText: 'New build card' }).isDisabled(), true, 'New build card offered before the ledger answered');
+    await p.goto(base);
+    await p.waitForSelector('.row >> text=Porch lights', { timeout: 10000 });
+    assert.deepEqual(await off(), [['New tote', false], ['Import', false]]);
+    assert.equal(await p.locator('.empty').count(), 0);
+    await p.click('text=New tote');
+    assert.equal(await p.inputValue('#f-id'), '02', 'New tote offered a number the sheet already has');
+    await p.fill('#f-name', 'Wreaths');
+    await p.fill('#f-items', 'Front door wreath');
+    await p.click('dialog >> button[type=submit]');
+    await p.waitForSelector('.tape >> text=Wreaths');
+    await p.waitForFunction(() => !/Saving/.test(document.querySelector('#sync').textContent));
+    const { _updated, ...was } = google.store['mothball.totes']['01'];
+    assert.deepEqual(was, t01, "the phone's tote 01 was changed");
+    assert.equal(google.store['mothball.totes']['02'].name, 'Wreaths');
+    // a sheet opened, then the copy forgotten before Save (say a new ledger in another tab): it isn't saved from nothing
+    await p.goto(base);
+    await p.click('text=New tote');
+    await p.waitForSelector('dialog[open]');
+    await p.evaluate(() => { const m = window.__mothball.ledger.m('totes'); m.since = 0; m.listed = false; });
+    await p.fill('#f-name', 'Garlands');
+    await p.click('dialog >> button[type=submit]');
+    await p.waitForSelector('.toast.show >> text=Still loading from the ledger. Try again in a moment.');
+    assert.equal(google.store['mothball.totes']['03'], undefined, 'saved over the sheet before the ledger answered');
+    assert.deepEqual(errors, [], 'errors on the laptop');
+  } finally { await laptop.close(); }
 }
 
 // Connected to a pretend ledger (the kit's own DemoLedger behind script.google.com), which goes down and comes back.

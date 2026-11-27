@@ -1,6 +1,6 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
-import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines } from './kit/ui.js';
-import { Ledger, watchConnectLinks, refusal, importText } from './kit/ledger.js';
+import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held } from './kit/ui.js';
+import { Ledger, watchConnectLinks, refusal, importText, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
@@ -18,12 +18,16 @@ const tote = id => ledger.doc('totes', id);
 const build = id => ledger.doc('builds', id);
 const nextNumber = () => String(Math.max(0, ...totes().map(t => parseInt(t.id, 10) || 0)) + 1).padStart(2, '0');
 const toteOf = buildId => totes().find(t => (t.builds || []).includes(buildId));
+// A new tote or card waits until this phone has heard from the ledger (before that its copy can't say which numbers
+// are taken, and a save would replace the tote another device has under that number), and asks for the latest first.
+const COLLS = ['totes', 'builds'];
+const fresh = then => e => held(e.currentTarget, ledger.catchUp(COLLS)).then(then);
 
 // ---------------------------------------------------------------- home
 function renderHome() {
   const list = totes();
   const order = SEASONS.map(s => s[0]).sort((a, b) => monthsUntil(a) - monthsUntil(b));
-  const soon = comingDown(list);
+  const soon = comingDown(list), wait = ledger.notReady(...COLLS);
   return [
     soon ? h('div', { class: 'notice warn' }, h('p', {}, h('b', {}, soon.head), soon.text)) : null,
     order.map(k => {
@@ -34,9 +38,9 @@ function renderHome() {
           h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, t.place || 'No shelf yet')),
           h('span', { class: 'meta' }, isOut(t) ? 'out' : t.packed ? 'packed ' + agoText(t.packed) : '')))))) : null;
     }),
-    !list.length ? h('p', { class: 'empty' }, ledger.notReady('totes') || 'No totes yet.') : null,
-    h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote(null) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),
-      h('button', { type: 'button', class: 'btn ghost', onclick: importFile }, 'Import')),
+    !list.length || wait ? h('p', { class: 'empty' }, wait || 'No totes yet.') : null,
+    h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', disabled: !!wait, onclick: fresh(() => editTote(null)) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),
+      h('button', { type: 'button', class: 'btn ghost', disabled: !!wait, onclick: importFile }, 'Import')),
   ];
 }
 
@@ -44,6 +48,8 @@ function renderHome() {
 function importFile() {
   const input = h('input', { type: 'file', accept: '.json,application/json' });
   input.addEventListener('change', async () => {
+    if (!COLLS.every(c => ledger.synced(c))) { toast(STILL_LOADING, 'bad'); return; }
+    await ledger.catchUp(COLLS);
     try {
       const data = JSON.parse(await input.files[0].text());
       let n = 0;
@@ -146,6 +152,7 @@ async function editTote(t) {
     return;
   }
   const id = (v.id || nextNumber()).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12) || nextNumber();
+  if (!tote(id) && !ledger.synced('totes')) { toast(STILL_LOADING, 'bad'); return; }
   if ((!exists || t.id !== id) && tote(id)) { toast(`There's already a tote ${id}.`, 'bad'); return; }
   const doc = { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note,
     items: lines(v.items), builds: v.builds.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
@@ -156,6 +163,7 @@ async function editTote(t) {
 
 // ---------------------------------------------------------------- build cards
 function renderBuilds() {
+  const wait = ledger.notReady(...COLLS);
   return [
     h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')),
     h('h2', {}, 'Build cards'),
@@ -163,7 +171,8 @@ function renderBuilds() {
     h('ul', { class: 'list' }, builds().map(b => h('li', {}, h('a', { class: 'row', href: '#/build/' + b.id },
       h('span', { class: 'main' }, h('span', { class: 't' }, b.name), h('span', { class: 's' }, seasonName(b.season) + (toteOf(b.id) ? ` · tote ${toteOf(b.id).id}` : ' · not in a tote'))),
       h('span', { class: 'meta' }, b.firmware || ''))))),
-    h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editBuild(null) }, 'New build card')),
+    wait ? h('p', { class: 'empty' }, wait) : null,
+    h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', disabled: !!wait, onclick: fresh(() => editBuild(null)) }, 'New build card')),
   ];
 }
 function renderBuild(b) {
@@ -185,6 +194,7 @@ async function editBuild(b) {
   ] });
   if (!v) return;
   if (v.__danger) { if (await confirmSheet(`Delete ${b.name}?`, 'The card goes; totes keep their contents list.', 'Delete')) { ledger.del('builds', b.id); go('#/builds'); } return; }
+  if (!b && !ledger.synced('builds')) { toast(STILL_LOADING, 'bad'); return; }
   const id = b?.id || uniqueBuildId(v.name);
   ledger.put('builds', { ...(b || {}), id, ...v });
   go('#/build/' + id); render();
@@ -224,9 +234,9 @@ function render() {
   else if (r.view === 'build') { const b = build(r.arg); body = b ? renderBuild(b) : [h('p', { class: 'empty' }, 'No such card.')]; }
   else if (r.view === 'label') { const t = tote(r.arg); body = t ? renderLabel(t) : [h('p', { class: 'empty' }, 'No such tote.')]; }
   else if (r.view === 'item') {
-    const t = tote(r.id), wait = ledger.notReady('totes');
+    const t = tote(r.id), wait = ledger.notReady(...COLLS);
     body = t ? renderTote(t) : [h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')), h('p', { class: 'empty' }, wait || `No tote ${r.id} yet.`),
-      !wait ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {}) }, `Set up tote ${r.id}`)) : null];
+      !wait ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: fresh(() => editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {})) }, `Set up tote ${r.id}`)) : null];
   } else body = renderHome();
   mount(app, body);
   const st = $('#sync'); st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText();
@@ -236,6 +246,6 @@ function render() {
 window.addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
 ledger.on(() => { const st = $('#sync'); if (st) { st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText(); } });
 render();
-ledger.keepUp(['totes', 'builds'], render);
+ledger.keepUp(COLLS, render);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 window.__mothball = { ledger, render };
