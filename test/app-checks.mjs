@@ -161,6 +161,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await renumberChecks({ page, base, assert });
   // Back from a tote 40 rows down lands where the list was
   const { backKeepsPlace } = await import('./kit-checks.mjs');
+  // every link, button and card header on the sample's screens is a 44 px target
+  await (await import('./kit-checks.mjs')).targetsAudit({ browser: ctx.browser(), base, assert, hashes: ['', '#01', '#02', '#/builds', '#/build/pumpkins', '#/label/01', '#09'] });
   await backKeepsPlace({ browser: ctx.browser(), base, assert, app: 'mothball', colls: { builds: [],
     totes: Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1).padStart(2, '0'), name: `Tote of things ${i + 1}`, season: 'christmas', place: 'Garage', items: [], builds: [] })) } });
 }

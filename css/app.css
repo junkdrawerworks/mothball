@@ -1,12 +1,11 @@
 /* Mothball: lavender, like the cedar-and-camphor drawer. */
 :root { --accent: #5E4B8B; --accent-ink: #F7F3FF; --tape: #5E4B8B; --tape-ink: #F7F3FF; --tape-edge: #3D2F60; }
 @media (prefers-color-scheme: dark) { :root { --accent: #CDBEF2; --accent-ink: #1E1830; --tape: #6E5A9E; --tape-edge: #2C2244; } }
-.crumb { margin: 0 0 8px; font-size: 15px; } .crumb a { color: var(--ink2); text-decoration: none; }
 .where { margin: -4px 0 2px; }
 .row .num { flex: none; min-width: 46px; width: auto; padding: 0 6px; height: 46px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 24px/1 var(--display); }
 .row.check { cursor: pointer; } .row.check input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 .small { font-size: 14px; margin-top: -6px; }
-details.build summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 19px; list-style: none; }
+details.build summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 19px; list-style: none; min-height: 44px; }
 details.build summary::-webkit-details-marker { display: none; }
 details.build summary::after { content: "▾"; color: var(--ink3); } details.build[open] summary::after { content: "▴"; }
 details.build[open] summary { margin-bottom: 10px; }
@@ -23,4 +22,4 @@ ol.steps { padding-left: 22px; margin: 0 0 10px; } ol.steps li { margin: 0 0 6px
 @media print { .label { width: 150mm; max-width: none; } }
 .btns.pack { margin: 4px 0 14px; }
 .note .done { margin: -6px -4px -10px 0; text-align: right; }
-.note .done .linkish { color: inherit; font-weight: 600; min-height: 44px; padding: 0 4px; }
+.note .done .linkish { color: inherit; font-weight: 600; min-height: 44px; min-width: 44px; padding: 0 4px; }
