@@ -46,6 +46,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.goto(base + '?demo#/label/01');
   await page.waitForSelector('.label-qr svg');
   assert.match(await page.locator('.label-num').innerText(), /01/);
+  await printChecks(page, assert, '.label');
   await page.goto(base + '?demo#/builds');
   assert.equal(await page.locator('.list .row').count(), 3);
   // an import with a record the ledger would refuse: the rest go in, and the toast says what was left out
@@ -97,4 +98,22 @@ async function ledgerChecks({ page, ctx, base, assert, problems }) {
   await page.evaluate(() => localStorage.clear());
   await page.goto(base);
   for (let i = problems.length - 1; i >= from; i--) if (/script\.google\.com|Failed to load resource: net::ERR_INTERNET_DISCONNECTED/.test(problems[i])) problems.splice(i, 1);
+}
+
+// On Letter with 0.4 in margins the page is 739 px across: the printed thing fits inside it, nothing else prints, and a
+// browser in dark mode prints the light palette.
+export async function printChecks(page, assert, sel) {
+  for (const colorScheme of ['light', 'dark']) {
+    await page.setViewportSize({ width: 739, height: 1000 });
+    await page.emulateMedia({ media: 'print', colorScheme });
+    const p = await page.evaluate(sel => ({
+      right: Math.max(...[...document.querySelectorAll(sel)].map(c => c.getBoundingClientRect().right)),
+      shown: ['header.top', '#edit-link', '#demo-note', '.no-print', '.sync', '.jd-foot'].filter(s => [...document.querySelectorAll(s)].some(el => el.getClientRects().length)),
+      ink: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim(), bg: getComputedStyle(document.body).backgroundColor }), sel);
+    assert.ok(p.right > 0 && p.right <= 739, `${colorScheme}: ${sel} reaches ${Math.round(p.right)} px of the 739 px printable width`);
+    assert.deepEqual(p.shown, [], `${colorScheme}: printed beside the ${sel}`);
+    assert.deepEqual([p.ink, p.bg], ['#000', 'rgb(255, 255, 255)'], `${colorScheme}: not the light palette in print`);
+  }
+  await page.emulateMedia({ media: null, colorScheme: null });
+  await page.setViewportSize({ width: 390, height: 844 });
 }

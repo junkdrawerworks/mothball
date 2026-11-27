@@ -19,4 +19,5 @@ ol.steps { padding-left: 22px; margin: 0 0 10px; } ol.steps li { margin: 0 0 6px
 .label-body ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.3; }
 .label-qr svg { display: block; }
 @media (max-width: 420px) { .label { grid-template-columns: auto minmax(0, 1fr); } .label-qr { grid-column: 1 / -1; justify-self: center; } }
+@page { size: letter; margin: 0.4in; }
 @media print { .label { width: 150mm; max-width: none; } }
