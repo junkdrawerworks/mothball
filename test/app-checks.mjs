@@ -152,6 +152,58 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
 
   await ledgerChecks({ page, ctx, base, assert, problems });
   await secondDevice({ ctx, base, assert });
+  await stickerPage({ ctx, base, assert });
+}
+
+// A phone that synced earlier, so Set up tote N shows at once from its copy, opens tote 03's sticker while the ledger
+// takes a moment to answer; meanwhile another device has filled tote 03 in. Set up tote 03 then opens that tote's page,
+// and when the tote comes in while the sheet is open, Save refuses: either way the sheet's tote 03 keeps everything.
+async function stickerPage({ ctx, base, assert }) {
+  const { DemoLedger } = await import(new URL('../js/kit/ledger.js', import.meta.url));
+  const t03 = { id: '03', name: 'Wreaths', season: 'christmas', place: 'Attic, left', items: ['Front door wreath', 'Wreath hangers (2)'], builds: [] };
+  const google = new DemoLedger({ 'mothball.totes': [t03] });
+  let hold = 1000;
+  const phone = await ctx.browser().newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, serviceWorkers: 'block' });
+  const errors = [];
+  phone.on('page', p => p.on('pageerror', e => errors.push(e.message)));
+  try {
+    await phone.route('https://script.google.com/**', async route => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      if (body.op === 'list') await new Promise(r => setTimeout(r, hold));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(google.handle(body)) });
+    });
+    // each new tab starts from a copy that has heard from the ledger but hasn't got tote 03
+    await phone.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.clear();
+      localStorage.setItem('mothball.ledger', JSON.stringify({ url: 'https://script.google.com/macros/s/AKfyTEST/exec', key: 'k'.repeat(40) }));
+      for (const c of ['totes', 'builds']) localStorage.setItem('mothball.m.' + c, JSON.stringify({ docs: {}, since: 0, listed: true })); } } catch {} });
+    const unchanged = what => { const { _updated, ...now } = google.store['mothball.totes']['03']; assert.deepEqual(now, t03, what); };
+    // the press asks the ledger first, and the tote is in its answer
+    let p = await phone.newPage();
+    await p.goto(base + '#03');
+    await p.waitForSelector('text=No tote 03 yet.');
+    await p.click('text=Set up tote 03');
+    await p.waitForSelector('dialog[open], .tape >> text=Wreaths');
+    if (await p.locator('dialog[open]').count()) { await p.fill('#f-name', 'Typed on the phone'); await p.click('dialog >> button[type=submit]'); }
+    await p.waitForTimeout(1500);
+    unchanged('Set up tote 03 replaced the tote another device filled in');
+    assert.equal(await p.locator('.tape').textContent(), 'Wreaths');
+    await p.close();
+    // the tote comes in while the sheet is open
+    hold = 3000;
+    p = await phone.newPage();
+    await p.goto(base + '#03');
+    await p.waitForSelector('text=No tote 03 yet.');
+    await p.evaluate(() => { window.__mothball.ledger.listedAt = Date.now(); });   // asked a moment ago: no catch-up
+    await p.click('text=Set up tote 03');
+    await p.waitForSelector('dialog[open]');
+    await p.fill('#f-name', 'Typed on the phone');
+    await p.waitForFunction(() => !!window.__mothball.ledger.doc('totes', '03'), null, { timeout: 8000 });
+    await p.click('dialog >> button[type=submit]');
+    await p.waitForSelector(".toast.show >> text=There's already a tote 03.");
+    await p.waitForTimeout(1000);
+    unchanged('a tote that came in while the sheet was open was saved over');
+    assert.deepEqual(errors, [], 'errors on the phone');
+  } finally { await phone.close(); }
 }
 
 // The laptop, connected while Google takes 3 s to answer its first list (a cold start), with the phone's tote 01 filled

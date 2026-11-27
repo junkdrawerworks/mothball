@@ -130,7 +130,7 @@ async function noteDone(t) {
 }
 
 async function editTote(t) {
-  const exists = !!(t && tote(t.id));
+  const exists = !!(t?._updated && tote(t.id));   // a sticker page's stub has no saved time: always a new tote
   const v = await sheet({ title: t?.id ? `Tote ${t.id}` : 'New tote', danger: exists ? 'Delete' : null, fields: [
     { name: 'id', label: 'Number', value: t?.id || nextNumber(), inputmode: 'numeric', hint: exists ? 'The number on its sticker. Changing it needs a new sticker.' : 'Write it big on the tote too.' },
     { name: 'name', label: 'What it is', value: t?.name, required: true, placeholder: 'Christmas lights and the porch train' },
@@ -231,7 +231,7 @@ function render() {
   else if (r.view === 'item') {
     const t = tote(r.id), wait = ledger.notReady(...COLLS);
     body = t ? renderTote(t) : [h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')), h('p', { class: 'empty' }, wait || `No tote ${r.id} yet.`),
-      !wait ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: fresh(() => editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {})) }, `Set up tote ${r.id}`)) : null];
+      !wait ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: fresh(() => tote(r.id) ? render() : editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {})) }, `Set up tote ${r.id}`)) : null];
   } else body = renderHome();
   mount(app, body);
   const st = $('#sync'); st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText();
