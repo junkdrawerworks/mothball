@@ -151,6 +151,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
   await refusedChecks({ page, base, assert });
+  await heldChecks({ ctx, base, assert });
   await ledgerChecks({ page, ctx, base, assert, problems });
   await secondDevice({ ctx, base, assert });
   await stickerPage({ ctx, base, assert });
@@ -178,6 +179,40 @@ async function refusedChecks({ page, base, assert }) {
   await page.waitForFunction(() => location.hash === '#03' && !document.querySelector('dialog[open]'));
   assert.deepEqual(await page.evaluate(() => window.__mothball.ledger.doc('totes', '03').items), typed.split('\n'));
   assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '01')), null, 'tote 01 stayed under its old number');
+}
+
+// New tote on a page open a while asks the ledger first; with Google taking 3 s, the button says so meanwhile, at its
+// own width, then the sheet opens and the button is as it was.
+async function heldChecks({ ctx, base, assert }) {
+  const { DemoLedger } = await import(new URL('../js/kit/ledger.js', import.meta.url));
+  const google = new DemoLedger({ 'mothball.totes': [{ id: '01', name: 'Porch lights', season: 'christmas', items: [] }] });
+  const phone = await ctx.browser().newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  let slow = false;
+  try {
+    await phone.route('https://script.google.com/**', async route => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      if (slow && body.op === 'list') await new Promise(r => setTimeout(r, 3000));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(google.handle(body)) });
+    });
+    await phone.addInitScript(() => { try { localStorage.getItem('mothball.ledger') || localStorage.setItem('mothball.ledger',
+      JSON.stringify({ url: 'https://script.google.com/macros/s/AKfyTEST/exec', key: 'k'.repeat(40) })); } catch {} });
+    const p = await phone.newPage();
+    await p.goto(base);
+    await p.waitForSelector('.row >> text=Porch lights');
+    await p.evaluate(() => { window.__mothball.ledger.listedAt = Date.now() - 60000; });   // the last list over 30 s ago
+    slow = true;
+    const btn = p.locator('#app .btns button').first();
+    const before = await btn.evaluate(b => [b.textContent, Math.round(b.getBoundingClientRect().width)]);
+    assert.equal(before[0], 'New tote');
+    await btn.click();
+    await p.waitForTimeout(500);
+    const during = await btn.evaluate(b => [b.textContent, b.disabled, b.getAttribute('aria-busy'), Math.round(b.getBoundingClientRect().width)]);
+    assert.deepEqual(during.slice(0, 3), ['Checking…', true, 'true'], 'New tote sat greyed with no words while it asked the ledger');
+    assert.ok(during[3] >= before[1], `the button shrank from ${before[1]} to ${during[3]} px`);
+    await p.waitForSelector('dialog[open]', { timeout: 6000 });
+    assert.equal(await p.inputValue('#f-id'), '02');
+    assert.deepEqual(await p.locator('#app .btns button').first().evaluate(b => [b.textContent, b.disabled, b.hasAttribute('aria-busy')]), ['New tote', false, false]);
+  } finally { await phone.close(); }
 }
 
 // A tote given a new number: its sticker still holds the old one, so the panel doesn't say Written.
