@@ -79,12 +79,16 @@ function buildCard(b, open = false) {
 function renderTote(t) {
   const items = t.items || [], keys = tickKeys(t.id, items);
   const bs = (t.builds || []).map(build).filter(Boolean);
-  const out = isOut(t);
+  const out = isOut(t), away = !out && !!t.packed;
+  // the press that comes next is the filled one: unpacking a tote that's put away, packing one that's out
+  const pack = h('button', { type: 'button', class: away ? 'btn ghost' : 'btn', onclick: () => packed(t) }, 'I packed it');
+  const unpack = h('button', { type: 'button', class: away ? 'btn' : 'btn ghost', onclick: () => unpacked(t) }, 'I unpacked it');
   return [
     h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')),
     h('div', { class: 'tape-wrap' }, h('span', { class: 'tape-cap' }, `Tote ${t.id} · ${seasonName(t.season)}`), h('div', { class: 'tape' }, t.name)),
     h('p', { class: 'where' }, h('b', {}, 'Lives: '), t.place || 'not set', t.box ? ` · moving box ${t.box}` : ''),
     h('p', { class: 'muted' }, out ? (t.unpacked ? `Out since ${dayText(t.unpacked)}.` : 'Out.') : t.packed ? `Packed ${dayText(t.packed)}.` : 'Not packed yet.'),
+    h('div', { class: 'btns pack' }, away ? [unpack, pack] : [pack, unpack]),
     t.note ? h('div', { class: 'notice warn note' }, h('p', {}, h('b', {}, 'Note from last time: '), t.note),
       h('p', { class: 'done' }, h('button', { type: 'button', class: 'linkish', onclick: () => noteDone(t) }, 'Done'))) : null,
     h('h2', {}, 'In this tote'),
@@ -97,8 +101,6 @@ function renderTote(t) {
     items.length ? h('p', { class: 'muted small' }, `${keys.filter(k => checked.has(k)).length} of ${items.length} found`) : null,
     bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => buildCard(b, bs.length === 1))] : null,
     h('div', { class: 'btns' },
-      h('button', { type: 'button', class: 'btn', onclick: () => packed(t) }, 'I packed it'),
-      h('button', { type: 'button', class: 'btn ghost', onclick: () => unpacked(t) }, 'I unpacked it'),
       h('button', { type: 'button', class: 'btn ghost', onclick: () => editTote(t) }, 'Edit'),
       h('a', { class: 'btn ghost', href: '#/label/' + t.id }, 'Label')),
     nfcPanel(tagUrl('t', t.id), { tagged: t.tagged, onWritten: () => { ledger.put('totes', { ...(tote(t.id) || t), tagged: today() }); render(); } }),

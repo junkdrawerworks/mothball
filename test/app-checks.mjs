@@ -10,6 +10,13 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('text=Skating rink >> nth=0');
   await page.waitForSelector('.tape >> text=Skating rink');
   assert.equal(await page.locator('.checks li').count(), 4);
+  // put away since January: the next press, I unpacked it, is the filled button, right under the date, above the list
+  const packRow = () => page.locator('.btns.pack button').evaluateAll(bs => bs.map(b => [b.textContent, b.className]));
+  assert.deepEqual(await packRow(), [['I unpacked it', 'btn'], ['I packed it', 'btn ghost']]);
+  assert.ok(await page.locator('.btns.pack').evaluate(el => el.getBoundingClientRect().bottom <= document.querySelector('.checks').getBoundingClientRect().top),
+    'Pack and Unpack sit under the list');
+  assert.equal(await page.locator('.where + p').textContent(), 'Packed Jan 4, 2026.');
+  assert.equal(await page.locator('.where + p + .btns.pack').count(), 1, 'the row is not right under the date');
   await page.click('.checks li >> nth=0');
   await page.waitForSelector('text=1 of 4 found');
   assert.equal(await page.locator('details.build[open] ol.steps li').count(), 3, 'one build, open, with its three steps');
@@ -30,6 +37,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('text=I unpacked it');
   await page.waitForSelector('.toast.show >> text=Tote 02 is out.');
   assert.match(await page.locator('.where + p').textContent(), /^Out since [A-Z][a-z]{2} \d{1,2}, \d{4}\.$/, 'a same-day unpack still reads packed');
+  assert.deepEqual(await packRow(), [['I packed it', 'btn'], ['I unpacked it', 'btn ghost']]);
   const t02 = await page.evaluate(() => window.__mothball.ledger.doc('totes', '02'));
   assert.deepEqual([t02.packed === t02.unpacked, t02.out], [true, true]);
   await page.click('text=‹ All totes');
