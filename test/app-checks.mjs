@@ -51,6 +51,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('dialog >> button[type=submit]');
   await page.waitForSelector('.note >> text=Buy a spare candle.');
   await page.click('.note >> text=Done');
+  // the button that does the thing for good is the red one, not the app's colour in Save's place
+  assert.equal(await page.locator('dialog[open] button[type=submit]').getAttribute('class'), 'btn danger');
   await page.click('dialog >> text=Clear it');
   await page.waitForSelector('.toast.show >> text=Note cleared.');
   assert.equal(await page.locator('.note').count(), 0);
@@ -137,6 +139,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.waitForSelector('.tape >> text=Tree skirt');
   await page.click('#app button:text-is("Edit")');
   await page.click('dialog >> text=Delete');
+  assert.deepEqual(await page.locator('dialog[open] button[type=submit]').evaluate(b => [b.textContent, b.className]), ['Delete', 'btn danger'], 'Delete tote looks like Save');
   await page.click('dialog >> button[type=submit]');
   await page.waitForSelector('.row >> text=Garlands and the sleigh');
   // an updated file: a Wi-Fi line for the card and a line for tote 07, blanks everywhere else

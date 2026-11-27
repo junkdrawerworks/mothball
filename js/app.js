@@ -125,7 +125,7 @@ function unpacked(t) {
 }
 // The note was seen to (the new supply bought): it goes, after a yes.
 async function noteDone(t) {
-  if (!await confirmSheet('Clear the note?', `"${t.note}" goes. A new one can go in Edit, or when you pack it.`, 'Clear it')) return;
+  if (!await confirmSheet('Clear the note?', `"${t.note}" goes. A new one can go in Edit, or when you pack it.`, 'Clear it', { danger: true })) return;
   ledger.put('totes', { ...(tote(t.id) || t), note: '' });
   toast('Note cleared.'); render();
 }
@@ -157,7 +157,7 @@ async function editTote(t) {
   ] });
   if (!v) return;
   if (v.__danger) {
-    if (await confirmSheet(`Delete tote ${t.id}?`, 'Its list and notes go. The build cards stay.', 'Delete')) { ledger.del('totes', t.id); go('#'); }
+    if (await confirmSheet(`Delete tote ${t.id}?`, 'Its list and notes go. The build cards stay.', 'Delete', { danger: true })) { ledger.del('totes', t.id); go('#'); }
     return;
   }
   const doc = made(v), id = doc.id;
@@ -200,7 +200,7 @@ async function editBuild(b) {
     { name: 'guide', label: 'Build guide link', type: 'url', value: b?.guide },
   ] });
   if (!v) return;
-  if (v.__danger) { if (await confirmSheet(`Delete ${b.name}?`, 'The card goes; totes keep their contents list.', 'Delete')) { ledger.del('builds', b.id); go('#/builds'); } return; }
+  if (v.__danger) { if (await confirmSheet(`Delete ${b.name}?`, 'The card goes; totes keep their contents list.', 'Delete', { danger: true })) { ledger.del('builds', b.id); go('#/builds'); } return; }
   const doc = made(v);
   ledger.put('builds', doc);
   go('#/build/' + doc.id); render();
