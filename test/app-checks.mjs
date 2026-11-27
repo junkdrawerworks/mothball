@@ -25,6 +25,27 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('text=‹ All totes');
   await page.waitForSelector('.row .num');
   assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'packed today');
+  // that was a mistake: I unpacked it the same day wins
+  await page.click('text=Skating rink >> nth=0');
+  await page.click('text=I unpacked it');
+  await page.waitForSelector('.toast.show >> text=Tote 02 is out.');
+  assert.match(await page.locator('.where + p').textContent(), /^Out since [A-Z][a-z]{2} \d{1,2}, \d{4}\.$/, 'a same-day unpack still reads packed');
+  const t02 = await page.evaluate(() => window.__mothball.ledger.doc('totes', '02'));
+  assert.deepEqual([t02.packed === t02.unpacked, t02.out], [true, true]);
+  await page.click('text=‹ All totes');
+  await page.waitForSelector('.row .num');
+  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'out');
+  // the season notice, on Nov 27: one tote reads as one, and it goes once the tote is down
+  const nov = await ctx.newPage();
+  await nov.clock.setFixedTime(new Date(2026, 10, 27, 12));
+  await nov.goto(base + '?demo');
+  assert.equal(await nov.locator('.notice.warn').innerText(), 'Christmas is next month. Tote 02 comes down.');
+  await nov.goto(base + '?demo#02');
+  await nov.click('text=I unpacked it');
+  await nov.click('text=‹ All totes');
+  await nov.waitForSelector('.row .num');
+  assert.equal(await nov.locator('.notice.warn').count(), 0, 'the notice lists a tote already down');
+  await nov.close();
   // a new tote, set up from a tag that isn't in the list yet
   await page.goto(base + '?demo#05');
   await page.click('text=Set up tote 05');

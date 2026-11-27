@@ -4,6 +4,7 @@ import { Ledger, watchConnectLinks, refusal, importText } from './kit/ledger.js'
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
+import { isOut, comingDown } from './totes.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 watchConnectLinks('mothball', toast);
@@ -22,17 +23,16 @@ const toteOf = buildId => totes().find(t => (t.builds || []).includes(buildId));
 function renderHome() {
   const list = totes();
   const order = SEASONS.map(s => s[0]).sort((a, b) => monthsUntil(a) - monthsUntil(b));
-  const soon = order.find(k => monthsUntil(k) <= 1 && list.some(t => t.season === k));
+  const soon = comingDown(list);
   return [
-    soon ? h('div', { class: 'notice warn' }, h('p', {}, h('b', {}, `${seasonName(soon)} ${monthsUntil(soon) === 0 ? 'is here' : 'is next month'}. `),
-      `Totes ${list.filter(t => t.season === soon).map(t => t.id).join(', ')} come down.`)) : null,
+    soon ? h('div', { class: 'notice warn' }, h('p', {}, h('b', {}, soon.head), soon.text)) : null,
     order.map(k => {
       const in_ = list.filter(t => (t.season || 'other') === k);
       return in_.length ? h('section', {}, h('h2', {}, seasonName(k)), h('ul', { class: 'list' }, in_.map(t =>
         h('li', {}, h('a', { class: 'row', href: '#' + t.id },
           h('span', { class: 'num' }, t.id),
           h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, t.place || 'No shelf yet')),
-          h('span', { class: 'meta' }, t.unpacked && (!t.packed || t.unpacked > t.packed) ? 'out' : t.packed ? 'packed ' + agoText(t.packed) : '')))))) : null;
+          h('span', { class: 'meta' }, isOut(t) ? 'out' : t.packed ? 'packed ' + agoText(t.packed) : '')))))) : null;
     }),
     !list.length ? h('p', { class: 'empty' }, ledger.notReady('totes') || 'No totes yet.') : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editTote(null) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),
@@ -79,12 +79,12 @@ function buildCard(b, open = false) {
 function renderTote(t) {
   const items = t.items || [];
   const bs = (t.builds || []).map(build).filter(Boolean);
-  const out = t.unpacked && (!t.packed || t.unpacked > t.packed);
+  const out = isOut(t);
   return [
     h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')),
     h('div', { class: 'tape-wrap' }, h('span', { class: 'tape-cap' }, `Tote ${t.id} · ${seasonName(t.season)}`), h('div', { class: 'tape' }, t.name)),
     h('p', { class: 'where' }, h('b', {}, 'Lives: '), t.place || 'not set', t.box ? ` · moving box ${t.box}` : ''),
-    h('p', { class: 'muted' }, out ? `Out since ${dayText(t.unpacked)}.` : t.packed ? `Packed ${dayText(t.packed)}.` : 'Not packed yet.'),
+    h('p', { class: 'muted' }, out ? (t.unpacked ? `Out since ${dayText(t.unpacked)}.` : 'Out.') : t.packed ? `Packed ${dayText(t.packed)}.` : 'Not packed yet.'),
     t.note ? h('div', { class: 'notice warn note' }, h('p', {}, h('b', {}, 'Note from last time: '), t.note)) : null,
     h('h2', {}, 'In this tote'),
     items.length ? h('ul', { class: 'list checks' }, items.map((it, i) => {
@@ -97,7 +97,7 @@ function renderTote(t) {
     bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => buildCard(b, bs.length === 1))] : null,
     h('div', { class: 'btns' },
       h('button', { type: 'button', class: 'btn', onclick: () => packed(t) }, 'I packed it'),
-      h('button', { type: 'button', class: 'btn ghost', onclick: () => { ledger.put('totes', { ...t, unpacked: today() }); toast(`Tote ${t.id} is out.`); render(); } }, 'I unpacked it'),
+      h('button', { type: 'button', class: 'btn ghost', onclick: () => unpacked(t) }, 'I unpacked it'),
       h('button', { type: 'button', class: 'btn ghost', onclick: () => editTote(t) }, 'Edit'),
       h('a', { class: 'btn ghost', href: '#/label/' + t.id }, 'Label')),
     nfcPanel(tagUrl('t', t.id), { tagged: t.tagged, onWritten: () => { ledger.put('totes', { ...(tote(t.id) || t), tagged: today() }); render(); } }),
@@ -110,9 +110,13 @@ async function packed(t) {
     { name: 'place', label: 'Where it\'s going', value: t.place },
   ] });
   if (!v || v.__danger) return;
-  ledger.put('totes', { ...t, packed: today(), note: v.note, place: v.place });
+  ledger.put('totes', { ...(tote(t.id) || t), packed: today(), out: false, note: v.note, place: v.place });
   [...checked].filter(k => k.startsWith(t.id + ':')).forEach(k => checked.delete(k));
   toast(`Tote ${t.id} packed.`); render();
+}
+function unpacked(t) {
+  ledger.put('totes', { ...(tote(t.id) || t), unpacked: today(), out: true });
+  toast(`Tote ${t.id} is out.`); render();
 }
 
 async function editTote(t) {
