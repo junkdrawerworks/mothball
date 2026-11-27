@@ -100,7 +100,7 @@ function renderTote(t) {
       h('button', { type: 'button', class: 'btn ghost', onclick: () => { ledger.put('totes', { ...t, unpacked: today() }); toast(`Tote ${t.id} is out.`); render(); } }, 'I unpacked it'),
       h('button', { type: 'button', class: 'btn ghost', onclick: () => editTote(t) }, 'Edit'),
       h('a', { class: 'btn ghost', href: '#/label/' + t.id }, 'Label')),
-    nfcPanel(tagUrl('t', t.id), { onWritten: () => ledger.put('totes', { ...t, tagged: today() }) }),
+    nfcPanel(tagUrl('t', t.id), { tagged: t.tagged, onWritten: () => { ledger.put('totes', { ...(tote(t.id) || t), tagged: today() }); render(); } }),
   ];
 }
 

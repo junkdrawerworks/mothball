@@ -14,6 +14,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(await page.locator('details.build[open] ol.steps li').count(), 3, 'one build, open, with its three steps');
   await page.click('text=Write sticker');
   await page.waitForFunction(() => window.__nfc.writes[0] === 'https://tag.junkdrawer.works/t/02');
+  await page.waitForFunction(() => /^Written [A-Z][a-z]{2} \d{1,2}, \d{4}\.$/.test(document.querySelector('.nfc .state')?.textContent || ''));
+  assert.equal(await page.locator('.nfc > .msg:last-child').textContent(), 'Written. Tap it with the phone to check it opens this page.');
   await page.click('text=I packed it');
   await page.fill('#f-note', 'Buy a spare USB-C supply.');
   await page.click('dialog >> button[type=submit]');
