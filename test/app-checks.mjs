@@ -122,10 +122,11 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.evaluate(() => { location.hash = '#07'; });
   await page.waitForSelector('.tape >> text=Garlands and the rink');
   await page.click('#app button:text-is("Edit")');
-  await page.fill('#f-items', 'Garland (3)\nRink base\nMagnets');
+  await page.fill('#f-items', 'Garland (3)\n2.5 m extension lead\n- Magnets');
   await page.fill('#f-place', 'Basement shelf');
   await page.click('dialog >> button[type=submit]');
   await page.waitForSelector('.where >> text=Basement shelf');
+  assert.deepEqual(await page.locator('.checks .t').allTextContents(), ['Garland (3)', '2.5 m extension lead', 'Magnets'], 'a number at the start of a line was cut');
   await page.click('text=Edit card');
   await page.click('#app button:text-is("Edit")');
   await page.fill('#f-firmware', 'v1.3');
@@ -144,7 +145,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await importing(file, 'Filled in 2, kept your edits; left out 1 you deleted; skipped 1 (id "Tree topper").');
   await importing(file, 'Nothing new in the file; your edits stay; left out 1 you deleted; skipped 1 (id "Tree topper").');
   const [t07, rink, t08] = await page.evaluate(() => [window.__mothball.ledger.doc('totes', '07'), window.__mothball.ledger.doc('builds', 'rink'), window.__mothball.ledger.doc('totes', '08')]);
-  assert.deepEqual([t07.items, t07.place], [['Garland (3)', 'Rink base', 'Magnets', 'Spare magnets'], 'Basement shelf'], 'the contents typed at the tote went');
+  assert.deepEqual([t07.items, t07.place], [['Garland (3)', '2.5 m extension lead', 'Magnets', 'Spare magnets'], 'Basement shelf'], 'the contents typed at the tote went');
   assert.deepEqual([rink.firmware, rink.power, rink.wifi], ['v1.3', '12 V 2 A', 'Rink-AP: hold the button 5 s'], 'the card lost its firmware or power');
   assert.equal(t08, null, 'a tote deleted here came back');
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
