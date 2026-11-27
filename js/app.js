@@ -151,7 +151,7 @@ async function editTote(t) {
   if ((!exists || t.id !== id) && tote(id)) { toast(`There's already a tote ${id}.`, 'bad'); return; }
   const doc = { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note,
     items: lines(v.items), builds: v.builds.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
-  if (exists && t.id !== id) ledger.del('totes', t.id);
+  if (exists && t.id !== id) { ledger.del('totes', t.id); delete doc.tagged; }   // a new number needs a new sticker
   ledger.put('totes', doc);
   go('#' + id); render();
 }

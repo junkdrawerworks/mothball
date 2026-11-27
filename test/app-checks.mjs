@@ -153,6 +153,30 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await ledgerChecks({ page, ctx, base, assert, problems });
   await secondDevice({ ctx, base, assert });
   await stickerPage({ ctx, base, assert });
+  await renumberChecks({ page, base, assert });
+}
+
+// A tote given a new number: its sticker still holds the old one, so the panel doesn't say Written.
+async function renumberChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo#02');
+  await page.waitForSelector('.nfc');
+  await page.evaluate(() => { const { ledger, render } = window.__mothball; ledger.put('totes', { ...ledger.doc('totes', '02'), tagged: '2026-11-20' }); render(); });
+  await page.waitForSelector('.nfc .state >> text=Written Nov 20, 2026.');
+  await page.click('#app button:text-is("Edit")');
+  await page.fill('#f-id', '05');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('.tape >> text=Porch train');
+  await page.waitForFunction(() => location.hash === '#05');
+  assert.equal(await page.locator('.nfc .state', { hasText: /^Written/ }).count(), 0, 'tote 05 says its sticker is written, but the sticker holds t/02');
+  assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '05').tagged), undefined);
+  // and an edit that keeps the number keeps the written date
+  await page.evaluate(() => { const { ledger, render } = window.__mothball; ledger.put('totes', { ...ledger.doc('totes', '05'), tagged: '2026-11-21' }); render(); });
+  await page.click('#app button:text-is("Edit")');
+  await page.fill('#f-place', 'Basement, rack by the door, bottom');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('.where >> text=bottom');
+  assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '05').tagged), '2026-11-21');
 }
 
 // A phone that synced earlier, so Set up tote N shows at once from its copy, opens tote 03's sticker while the ledger
