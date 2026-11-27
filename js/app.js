@@ -1,5 +1,5 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
-import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held } from './kit/ui.js';
+import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held, sampleLink } from './kit/ui.js';
 import { Ledger, watchConnectLinks, importSummary, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
@@ -104,7 +104,7 @@ function renderTote(t) {
     h('div', { class: 'btns' },
       h('button', { type: 'button', class: 'btn ghost', onclick: () => editTote(t) }, 'Edit'),
       h('a', { class: 'btn ghost', href: '#/label/' + t.id }, 'Label')),
-    nfcPanel(tagUrl('t', t.id), { tagged: t.tagged, onWritten: () => { ledger.put('totes', { ...(tote(t.id) || t), tagged: today() }); render(); } }),
+    nfcPanel(tagUrl('t', t.id), { sample: !!ledger.demo, tagged: t.tagged, onWritten: () => { ledger.put('totes', { ...(tote(t.id) || t), tagged: today() }); render(); } }),
   ];
 }
 
@@ -235,6 +235,7 @@ function render() {
   } else body = renderHome();
   mount(app, body);
   const st = $('#sync'); st.className = 'sync ' + ledger.state; st.textContent = ledger.statusText();
+  if (ledger.demo && !$('.sample-out')) st.after(sampleLink());
   document.title = r.view === 'item' && tote(r.id) ? `Tote ${r.id} · Mothball` : 'Mothball';
 }
 
