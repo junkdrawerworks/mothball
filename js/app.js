@@ -132,7 +132,7 @@ async function editTote(t) {
   const exists = !!(t && tote(t.id));
   const v = await sheet({ title: t?.id ? `Tote ${t.id}` : 'New tote', danger: exists ? 'Delete' : null, fields: [
     { name: 'id', label: 'Number', value: t?.id || nextNumber(), inputmode: 'numeric', hint: exists ? 'The number on its sticker. Changing it needs a new sticker.' : 'Write it big on the tote too.' },
-    { name: 'name', label: 'What it is', value: t?.name, required: true, placeholder: 'Christmas lights and the rink' },
+    { name: 'name', label: 'What it is', value: t?.name, required: true, placeholder: 'Christmas lights and the porch train' },
     { name: 'season', label: 'Season', type: 'select', value: t?.season || 'christmas', options: SEASONS.map(s => [s[0], s[1]]) },
     { name: 'place', label: 'Where it lives', value: t?.place, placeholder: 'Garage, top shelf, left' },
     { name: 'items', label: 'Contents (one per line)', type: 'textarea', rows: 6, value: (t?.items || []).join('\n') },
@@ -174,7 +174,7 @@ async function editBuild(b) {
   const v = await sheet({ title: b ? b.name : 'New build card', danger: b ? 'Delete' : null, fields: [
     { name: 'name', label: 'Name', value: b?.name, required: true },
     { name: 'season', label: 'Season', type: 'select', value: b?.season || 'christmas', options: SEASONS.map(s => [s[0], s[1]]) },
-    { name: 'power', label: 'Power', value: b?.power, placeholder: '5 V 3 A barrel supply, centre positive' },
+    { name: 'power', label: 'Power', value: b?.power, placeholder: '12 V 1 A barrel supply, centre positive' },
     { name: 'firmware', label: 'Firmware version', value: b?.firmware },
     { name: 'code', label: 'Where the code is', value: b?.code },
     { name: 'wifi', label: 'Wi-Fi, and how to point it at a new network', type: 'textarea', rows: 2, value: b?.wifi },

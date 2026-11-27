@@ -7,8 +7,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.goto(base + '?demo');
   await page.waitForSelector('.row .num');
   assert.equal(await page.locator('.row .num').count(), 2);
-  await page.click('text=Skating rink >> nth=0');
-  await page.waitForSelector('.tape >> text=Skating rink');
+  await page.click('text=Porch train >> nth=0');
+  await page.waitForSelector('.tape >> text=Porch train');
   assert.equal(await page.locator('.checks li').count(), 4);
   // put away since January: the next press, I unpacked it, is the filled button, right under the date, above the list
   const packRow = () => page.locator('.btns.pack button').evaluateAll(bs => bs.map(b => [b.textContent, b.className]));
@@ -33,7 +33,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.waitForSelector('.row .num');
   assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'packed today');
   // that was a mistake: I unpacked it the same day wins
-  await page.click('text=Skating rink >> nth=0');
+  await page.click('text=Porch train >> nth=0');
   await page.click('text=I unpacked it');
   await page.waitForSelector('.toast.show >> text=Tote 02 is out.');
   assert.match(await page.locator('.where + p').textContent(), /^Out since [A-Z][a-z]{2} \d{1,2}, \d{4}\.$/, 'a same-day unpack still reads packed');
@@ -44,12 +44,12 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.waitForSelector('.row .num');
   assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'out');
   // tote 01: the note to next year is in Edit, and Done clears it
-  await page.click('text=Animated hand and hanging skeleton');
+  await page.click('text=Pumpkins and the porch web');
   await page.click('#app button:text-is("Edit")');
-  assert.match(await page.locator('#f-note').inputValue(), /^The ring finger tendon frayed/);
-  await page.fill('#f-note', 'Bring braided line.');
+  assert.match(await page.locator('#f-note').inputValue(), /^The middle pumpkin's candle stopped/);
+  await page.fill('#f-note', 'Buy a spare candle.');
   await page.click('dialog >> button[type=submit]');
-  await page.waitForSelector('.note >> text=Bring braided line.');
+  await page.waitForSelector('.note >> text=Buy a spare candle.');
   await page.click('.note >> text=Done');
   await page.click('dialog >> text=Clear it');
   await page.waitForSelector('.toast.show >> text=Note cleared.');
@@ -57,7 +57,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '01').note), '');
   await page.click('text=‹ All totes');
   // ticks stay on their things when a line is taken out in Edit
-  await page.click('text=Animated hand and hanging skeleton');
+  await page.click('text=Pumpkins and the porch web');
   await page.locator('.checks input').nth(0).check();
   await page.locator('.checks input').nth(1).check();
   await page.waitForSelector('text=2 of 4 found');
@@ -66,7 +66,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('dialog >> button[type=submit]');
   await page.waitForSelector('text=of 3 found');
   assert.deepEqual(await page.locator('.checks label').evaluateAll(ls => ls.filter(l => l.querySelector('input').checked).map(l => l.innerText.trim())),
-    ['5 V 3 A supply and barrel lead'], 'the ticks moved to other things');
+    ['AA batteries (bag of 12) and the remote'], 'the ticks moved to other things');
   assert.equal(await page.locator('text=of 3 found').textContent(), '1 of 3 found');
   // the season notice, on Nov 27: one tote reads as one, and it goes once the tote is down
   const nov = await ctx.newPage();
