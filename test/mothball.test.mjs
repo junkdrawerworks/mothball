@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { monthsUntil, seasonName } from '../js/sample.js';
-import { isOut, comingDown, toteNames } from '../js/totes.js';
+import { isOut, comingDown, toteNames, tickKeys } from '../js/totes.js';
 
 test('months until a season comes round', () => {
   const nov = new Date(2026, 10, 26);
@@ -34,4 +34,8 @@ test('the season notice lists only the totes still put away, in words that fit h
   assert.equal(comingDown([t('07', 'thanksgiving'), t('08', 'christmas')], nov).text, 'Tote 07 comes down.', 'the season that is here first');
   assert.equal(comingDown([t('07', 'thanksgiving', { out: true }), t('08', 'christmas')], nov).text, 'Tote 08 comes down.', 'then the next one');
   assert.equal(comingDown([t('01', 'halloween')], nov), null, 'nothing this month or next');
+});
+test('a tick stays on its thing when the list changes', () => {
+  assert.deepEqual(tickKeys('04', ['Lights', 'Spare fuses', 'Lights']), ['04:Lights', '04:Spare fuses', '04:Lights#2']);
+  assert.equal(tickKeys('04', ['Spare fuses', 'Timer'])[0], tickKeys('04', ['Lights', 'Spare fuses'])[1], 'line 1 taken out');
 });

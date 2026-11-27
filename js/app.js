@@ -4,13 +4,13 @@ import { Ledger, watchConnectLinks, refusal, importText } from './kit/ledger.js'
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
-import { isOut, comingDown } from './totes.js';
+import { isOut, comingDown, tickKeys } from './totes.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 watchConnectLinks('mothball', toast);
 const ledger = new Ledger('mothball', { demo: demo ? SAMPLE : null });
 const app = $('#app');
-const checked = new Set(); // contents ticked while unpacking: this visit only
+const checked = new Set(); // contents ticked while unpacking (tickKeys): this visit only
 
 const totes = () => ledger.docs('totes').sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 const builds = () => ledger.docs('builds').sort((a, b) => a.name.localeCompare(b.name));
@@ -77,7 +77,7 @@ function buildCard(b, open = false) {
 }
 
 function renderTote(t) {
-  const items = t.items || [];
+  const items = t.items || [], keys = tickKeys(t.id, items);
   const bs = (t.builds || []).map(build).filter(Boolean);
   const out = isOut(t);
   return [
@@ -89,12 +89,12 @@ function renderTote(t) {
       h('p', { class: 'done' }, h('button', { type: 'button', class: 'linkish', onclick: () => noteDone(t) }, 'Done'))) : null,
     h('h2', {}, 'In this tote'),
     items.length ? h('ul', { class: 'list checks' }, items.map((it, i) => {
-      const k = t.id + ':' + i;
+      const k = keys[i];
       return h('li', {}, h('label', { class: 'row check' + (checked.has(k) ? ' dim' : '') },
         h('input', { type: 'checkbox', checked: checked.has(k), onchange: e => { e.target.checked ? checked.add(k) : checked.delete(k); render(); } }),
         h('span', { class: 'main' }, h('span', { class: 't' }, it))));
     })) : h('p', { class: 'muted' }, 'Nothing listed.'),
-    items.length ? h('p', { class: 'muted small' }, `${[...checked].filter(k => k.startsWith(t.id + ':')).length} of ${items.length} found`) : null,
+    items.length ? h('p', { class: 'muted small' }, `${keys.filter(k => checked.has(k)).length} of ${items.length} found`) : null,
     bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => buildCard(b, bs.length === 1))] : null,
     h('div', { class: 'btns' },
       h('button', { type: 'button', class: 'btn', onclick: () => packed(t) }, 'I packed it'),

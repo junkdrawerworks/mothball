@@ -48,6 +48,18 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(await page.locator('.note').count(), 0);
   assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '01').note), '');
   await page.click('text=‹ All totes');
+  // ticks stay on their things when a line is taken out in Edit
+  await page.click('text=Animated hand and hanging skeleton');
+  await page.locator('.checks input').nth(0).check();
+  await page.locator('.checks input').nth(1).check();
+  await page.waitForSelector('text=2 of 4 found');
+  await page.click('#app button:text-is("Edit")');
+  await page.locator('#f-items').fill((await page.locator('#f-items').inputValue()).split('\n').slice(1).join('\n'));
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('text=of 3 found');
+  assert.deepEqual(await page.locator('.checks label').evaluateAll(ls => ls.filter(l => l.querySelector('input').checked).map(l => l.innerText.trim())),
+    ['5 V 3 A supply and barrel lead'], 'the ticks moved to other things');
+  assert.equal(await page.locator('text=of 3 found').textContent(), '1 of 3 found');
   // the season notice, on Nov 27: one tote reads as one, and it goes once the tote is down
   const nov = await ctx.newPage();
   await nov.clock.setFixedTime(new Date(2026, 10, 27, 12));

@@ -1,4 +1,4 @@
-// A tote's state and the home page's notice, from its records. No DOM here, so it is unit-tested.
+// A tote's state, its ticks and the home page's notice, from its records. No DOM here, so it is unit-tested.
 import { SEASONS, seasonName, monthsUntil } from './sample.js';
 
 // Out of storage? Each press saves it (out: true for "I unpacked it", false for "I packed it"), so the last press wins,
@@ -23,4 +23,11 @@ export function comingDown(totes, now = new Date()) {
       text: `${toteNames(ids)} ${ids.length > 1 ? 'come' : 'comes'} down.` };
   }
   return null;
+}
+
+// What a tick is kept under: the line's text (the second line with the same text gets #2), so a tick stays on its
+// thing when other lines are added or taken out.
+export function tickKeys(id, items) {
+  const seen = {};
+  return items.map(it => { const n = (seen[it] = (seen[it] || 0) + 1); return `${id}:${it}${n > 1 ? '#' + n : ''}`; });
 }
