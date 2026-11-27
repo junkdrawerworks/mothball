@@ -1,6 +1,6 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
 import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held, sampleLink } from './kit/ui.js';
-import { Ledger, watchConnectLinks, importSummary, STILL_LOADING } from './kit/ledger.js';
+import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
@@ -109,12 +109,13 @@ function renderTote(t) {
 }
 
 async function packed(t) {
+  const made = v => ({ ...(tote(t.id) || t), packed: today(), out: false, note: v.note, place: v.place });
   const v = await sheet({ title: `Packing tote ${t.id}`, ok: 'Packed', fields: [
     { name: 'note', label: 'Note to next year', type: 'textarea', rows: 4, value: t.note, placeholder: 'What broke, what you ran out of, what to buy before it comes out again.' },
     { name: 'place', label: 'Where it\'s going', value: t.place },
-  ] });
+  ], check: v => refusedLine(made(v)) });
   if (!v || v.__danger) return;
-  ledger.put('totes', { ...(tote(t.id) || t), packed: today(), out: false, note: v.note, place: v.place });
+  ledger.put('totes', made(v));
   [...checked].filter(k => k.startsWith(t.id + ':')).forEach(k => checked.delete(k));
   toast(`Tote ${t.id} packed.`); render();
 }
@@ -131,7 +132,20 @@ async function noteDone(t) {
 
 async function editTote(t) {
   const exists = !!(t?._updated && tote(t.id));   // a sticker page's stub has no saved time: always a new tote
-  const v = await sheet({ title: t?.id ? `Tote ${t.id}` : 'New tote', danger: exists ? 'Delete' : null, fields: [
+  // the tote as typed: its number made safe for a sticker, the contents and cards as lists
+  const made = v => {
+    const id = (v.id || nextNumber()).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12) || nextNumber();
+    return { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note,
+      items: lines(v.items), builds: v.builds.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
+  };
+  // a Save that can't go keeps the sheet open with everything typed: a number another tote has, or not heard from the ledger yet
+  const check = v => {
+    const doc = made(v), id = doc.id;
+    if (!tote(id) && !ledger.synced('totes')) return STILL_LOADING;
+    if ((!exists || t.id !== id) && tote(id)) return { field: 'id', line: `There's already a tote ${id}.` };
+    return refusedLine(doc);
+  };
+  const v = await sheet({ title: t?.id ? `Tote ${t.id}` : 'New tote', danger: exists ? 'Delete' : null, check, fields: [
     { name: 'id', label: 'Number', value: t?.id || nextNumber(), inputmode: 'numeric', hint: exists ? 'The number on its sticker. Changing it needs a new sticker.' : 'Write it big on the tote too.' },
     { name: 'name', label: 'What it is', value: t?.name, required: true, placeholder: 'Christmas lights and the porch train' },
     { name: 'season', label: 'Season', type: 'select', value: t?.season || 'christmas', options: SEASONS.map(s => [s[0], s[1]]) },
@@ -146,11 +160,7 @@ async function editTote(t) {
     if (await confirmSheet(`Delete tote ${t.id}?`, 'Its list and notes go. The build cards stay.', 'Delete')) { ledger.del('totes', t.id); go('#'); }
     return;
   }
-  const id = (v.id || nextNumber()).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12) || nextNumber();
-  if (!tote(id) && !ledger.synced('totes')) { toast(STILL_LOADING, 'bad'); return; }
-  if ((!exists || t.id !== id) && tote(id)) { toast(`There's already a tote ${id}.`, 'bad'); return; }
-  const doc = { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note,
-    items: lines(v.items), builds: v.builds.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
+  const doc = made(v), id = doc.id;
   if (exists && t.id !== id) { ledger.del('totes', t.id); delete doc.tagged; }   // a new number needs a new sticker
   ledger.put('totes', doc);
   go('#' + id); render();
@@ -175,7 +185,9 @@ function renderBuild(b) {
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => editBuild(b) }, 'Edit'))];
 }
 async function editBuild(b) {
-  const v = await sheet({ title: b ? b.name : 'New build card', danger: b ? 'Delete' : null, fields: [
+  const made = v => ({ ...(b || {}), id: b?.id || uniqueBuildId(v.name), ...v });
+  const check = v => !b && !ledger.synced('builds') ? STILL_LOADING : refusedLine(made(v));
+  const v = await sheet({ title: b ? b.name : 'New build card', danger: b ? 'Delete' : null, check, fields: [
     { name: 'name', label: 'Name', value: b?.name, required: true },
     { name: 'season', label: 'Season', type: 'select', value: b?.season || 'christmas', options: SEASONS.map(s => [s[0], s[1]]) },
     { name: 'power', label: 'Power', value: b?.power, placeholder: '12 V 1 A barrel supply, centre positive' },
@@ -189,10 +201,9 @@ async function editBuild(b) {
   ] });
   if (!v) return;
   if (v.__danger) { if (await confirmSheet(`Delete ${b.name}?`, 'The card goes; totes keep their contents list.', 'Delete')) { ledger.del('builds', b.id); go('#/builds'); } return; }
-  if (!b && !ledger.synced('builds')) { toast(STILL_LOADING, 'bad'); return; }
-  const id = b?.id || uniqueBuildId(v.name);
-  ledger.put('builds', { ...(b || {}), id, ...v });
-  go('#/build/' + id); render();
+  const doc = made(v);
+  ledger.put('builds', doc);
+  go('#/build/' + doc.id); render();
 }
 function uniqueBuildId(name) {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'build';

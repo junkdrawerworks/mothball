@@ -150,10 +150,34 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(t08, null, 'a tote deleted here came back');
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
+  await refusedChecks({ page, base, assert });
   await ledgerChecks({ page, ctx, base, assert, problems });
   await secondDevice({ ctx, base, assert });
   await stickerPage({ ctx, base, assert });
   await renumberChecks({ page, base, assert });
+}
+
+// A Save the app refuses (a number another tote has) keeps the sheet open with everything typed, says why above the
+// buttons and puts the focus on the number; Number 03 then saves what was typed.
+async function refusedChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo#01');
+  await page.click('#app button:text-is("Edit")');
+  const typed = 'Three foam pumpkins\nSpare LED candles x6\nExtension lead, 10 m\nZip ties\nTimer plug';
+  await page.fill('#f-items', typed);
+  await page.fill('#f-place', 'Garage, top shelf');
+  await page.fill('#f-id', '02');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector("dialog[open] .sheet-msg >> text=There's already a tote 02.");
+  assert.equal(await page.locator('dialog[open]').count(), 1);
+  assert.deepEqual([await page.inputValue('#f-items'), await page.inputValue('#f-place')], [typed, 'Garage, top shelf'], 'the refused Save lost what was typed');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'f-id', 'the focus is not on the number');
+  assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '02').name), 'Porch train', 'tote 02 was saved over');
+  await page.fill('#f-id', '03');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForFunction(() => location.hash === '#03' && !document.querySelector('dialog[open]'));
+  assert.deepEqual(await page.evaluate(() => window.__mothball.ledger.doc('totes', '03').items), typed.split('\n'));
+  assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('totes', '01')), null, 'tote 01 stayed under its old number');
 }
 
 // A tote given a new number: its sticker still holds the old one, so the panel doesn't say Written.
@@ -223,7 +247,8 @@ async function stickerPage({ ctx, base, assert }) {
     await p.fill('#f-name', 'Typed on the phone');
     await p.waitForFunction(() => !!window.__mothball.ledger.doc('totes', '03'), null, { timeout: 8000 });
     await p.click('dialog >> button[type=submit]');
-    await p.waitForSelector(".toast.show >> text=There's already a tote 03.");
+    await p.waitForSelector("dialog[open] .sheet-msg >> text=There's already a tote 03.");
+    assert.equal(await p.inputValue('dialog[open] #f-name'), 'Typed on the phone', 'the refused Save lost what was typed');
     await p.waitForTimeout(1000);
     unchanged('a tote that came in while the sheet was open was saved over');
     assert.deepEqual(errors, [], 'errors on the phone');
@@ -276,7 +301,8 @@ async function secondDevice({ ctx, base, assert }) {
     await p.evaluate(() => { const m = window.__mothball.ledger.m('totes'); m.since = 0; m.listed = false; });
     await p.fill('#f-name', 'Garlands');
     await p.click('dialog >> button[type=submit]');
-    await p.waitForSelector('.toast.show >> text=Still loading from the ledger. Try again in a moment.');
+    await p.waitForSelector('dialog[open] .sheet-msg >> text=Still loading from the ledger. Try again in a moment.');
+    assert.equal(await p.inputValue('dialog[open] #f-name'), 'Garlands', 'the refused Save lost what was typed');
     assert.equal(google.store['mothball.totes']['03'], undefined, 'saved over the sheet before the ledger answered');
     assert.deepEqual(errors, [], 'errors on the laptop');
   } finally { await laptop.close(); }
