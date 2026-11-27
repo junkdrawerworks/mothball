@@ -103,13 +103,51 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await printChecks(page, assert, '.label');
   await page.goto(base + '?demo#/builds');
   assert.equal(await page.locator('.list .row').count(), 3);
-  // an import with a record the ledger would refuse: the rest go in, and the toast says what was left out
+  // an import, the totes and a card then filled in at the tote, and the file imported again: what was typed stays, the
+  // file's new lines go in, a tote deleted here stays deleted, and records in the wrong shape are named, not saved
   await page.goto(base + '?demo');
-  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('text=Import')]);
-  await chooser.setFiles({ name: 'totes.json', mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify({ totes: [{ id: 'Tree topper', name: 'A name, not a number' }, { id: '07', name: 'Garlands', season: 'christmas' }] })) });
-  await page.waitForSelector('.toast.show >> text=Imported 1, skipped 1 with a bad id.');
-  await page.waitForSelector('.row >> text=Garlands');
+  const importing = async (data, said) => {
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('text=Import')]);
+    await chooser.setFiles({ name: 'mothball.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+    await page.waitForSelector(`.toast.show >> text=${said}`);
+  };
+  const file = { builds: [{ id: 'rink', name: 'Skating rink', season: 'christmas', power: '', firmware: '', wifi: '', bringup: 'Plug in the base\nPress the button' }],
+    totes: [{ id: '07', name: 'Garlands and the rink', season: 'christmas', builds: ['rink'], items: [] }, { id: '08', name: 'Tree skirt', season: 'christmas', items: [] },
+      { id: '09', name: 'Fans', season: 'other', items: 'Fan\nCooler' }, { id: 'Tree topper', name: 'A name, not a number' }] };
+  await importing(file, 'Added 4 records; skipped 1 (id "Tree topper").');
+  await page.waitForSelector('.row >> text=Garlands and the rink');
+  await page.click('.row >> text=Fans');
+  await page.waitForSelector('.tape >> text=Fans');
+  assert.deepEqual(await page.locator('.checks .t').allTextContents(), ['Fan', 'Cooler'], 'contents given as text');
+  await page.evaluate(() => { location.hash = '#07'; });
+  await page.waitForSelector('.tape >> text=Garlands and the rink');
+  await page.click('#app button:text-is("Edit")');
+  await page.fill('#f-items', 'Garland (3)\nRink base\nMagnets');
+  await page.fill('#f-place', 'Basement shelf');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('.where >> text=Basement shelf');
+  await page.click('text=Edit card');
+  await page.click('#app button:text-is("Edit")');
+  await page.fill('#f-firmware', 'v1.3');
+  await page.fill('#f-power', '12 V 2 A');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('summary .chip >> text=v1.3');
+  await page.evaluate(() => { location.hash = '#08'; });
+  await page.waitForSelector('.tape >> text=Tree skirt');
+  await page.click('#app button:text-is("Edit")');
+  await page.click('dialog >> text=Delete');
+  await page.click('dialog >> button[type=submit]');
+  await page.waitForSelector('.row >> text=Garlands and the rink');
+  // an updated file: a Wi-Fi line for the card and a line for tote 07, blanks everywhere else
+  file.builds[0].wifi = 'Rink-AP: hold the button 5 s';
+  file.totes[0].items = ['Spare magnets'];
+  await importing(file, 'Filled in 2, kept your edits; left out 1 you deleted; skipped 1 (id "Tree topper").');
+  await importing(file, 'Nothing new in the file; your edits stay; left out 1 you deleted; skipped 1 (id "Tree topper").');
+  const [t07, rink, t08] = await page.evaluate(() => [window.__mothball.ledger.doc('totes', '07'), window.__mothball.ledger.doc('builds', 'rink'), window.__mothball.ledger.doc('totes', '08')]);
+  assert.deepEqual([t07.items, t07.place], [['Garland (3)', 'Rink base', 'Magnets', 'Spare magnets'], 'Basement shelf'], 'the contents typed at the tote went');
+  assert.deepEqual([rink.firmware, rink.power, rink.wifi], ['v1.3', '12 V 2 A', 'Rink-AP: hold the button 5 s'], 'the card lost its firmware or power');
+  assert.equal(t08, null, 'a tote deleted here came back');
+  assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
   await ledgerChecks({ page, ctx, base, assert, problems });
   await secondDevice({ ctx, base, assert });

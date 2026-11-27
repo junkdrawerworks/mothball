@@ -1,10 +1,10 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
 import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held } from './kit/ui.js';
-import { Ledger, watchConnectLinks, refusal, importText, STILL_LOADING } from './kit/ledger.js';
+import { Ledger, watchConnectLinks, importSummary, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
-import { isOut, comingDown, tickKeys } from './totes.js';
+import { isOut, comingDown, tickKeys, mergeImport } from './totes.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 watchConnectLinks('mothball', toast);
@@ -44,24 +44,19 @@ function renderHome() {
   ];
 }
 
-// A JSON file of { builds: [...], totes: [...] }: each record is added, or merged over the one with the same id.
+// A JSON file of { builds: [...], totes: [...] }. It only fills in (mergeImport): a record new to this phone is added,
+// one here gets what's blank in it and the file's new lines, and nothing typed here is blanked or replaced. A record
+// deleted here stays deleted, and one the file has in the wrong shape is skipped and named.
 function importFile() {
   const input = h('input', { type: 'file', accept: '.json,application/json' });
   input.addEventListener('change', async () => {
     if (!COLLS.every(c => ledger.synced(c))) { toast(STILL_LOADING, 'bad'); return; }
     await ledger.catchUp(COLLS);
-    try {
-      const data = JSON.parse(await input.files[0].text());
-      let n = 0;
-      const skipped = {};
-      for (const [coll, list] of [['builds', data.builds], ['totes', data.totes]]) for (const d of list || []) {
-        if (!d) continue;
-        const rec = { ...(ledger.doc(coll, d.id) || {}), ...d }, why = refusal(rec);
-        if (why) { skipped[why] = (skipped[why] || 0) + 1; continue; }
-        ledger.put(coll, rec); n++;
-      }
-      toast(importText(n, skipped), Object.keys(skipped).length ? 'bad' : ''); render();
-    } catch { toast('That file isn\'t a Mothball import.', 'bad'); }
+    let merged;
+    try { merged = mergeImport(JSON.parse(await input.files[0].text()), (c, id) => ledger.doc(c, id), (c, id) => ledger.gone(c, id)); }
+    catch { toast('That file isn\'t a Mothball import.', 'bad'); return; }
+    for (const [coll, doc] of merged.puts) ledger.put(coll, doc);
+    toast(importSummary(merged.res, ['record', 'records']), merged.res.skipped.length ? 'bad' : ''); render();
   });
   input.click();
 }
