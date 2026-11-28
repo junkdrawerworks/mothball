@@ -20,7 +20,9 @@ const builds = () => ledger.docs('builds').sort((a, b) => a.name.localeCompare(b
 const tote = id => ledger.doc('totes', id);
 const build = id => ledger.doc('builds', id);
 const nextNumber = () => String(Math.max(0, ...totes().map(t => parseInt(t.id, 10) || 0)) + 1).padStart(2, '0');
-const toteOf = buildId => totes().find(t => (t.builds || []).includes(buildId));
+// Every tote a build card is in (a card is shared by any tote it goes in), and how they read: 'tote 01', 'totes 01, 02'.
+const totesOf = buildId => totes().filter(t => (t.builds || []).includes(buildId));
+const toteList = ts => (ts.length > 1 ? 'totes ' : 'tote ') + ts.map(t => t.id).join(', ');
 // A new tote or card waits until this phone has heard from the ledger (before that its copy can't say which numbers
 // are taken, and a save would replace the tote another device has under that number), and asks for the latest first.
 const COLLS = ['totes', 'builds'];
@@ -65,9 +67,12 @@ function importFile() {
 }
 
 // ---------------------------------------------------------------- one tote
-function buildCard(b, open = false, key = '') {
+// here: the tote whose page it's on, so a card shared with another tote says which ('Also in tote 02').
+function buildCard(b, open = false, key = '', here = null) {
+  const also = here ? totesOf(b.id).filter(t => t.id !== here) : [];
   return h('details', { class: 'build card', open, ontoggle: key ? e => cardOpen.set(key, e.currentTarget.open) : null },
     h('summary', {}, h('b', {}, b.name), b.firmware ? h('span', { class: 'chip' }, b.firmware) : null),
+    also.length ? h('p', { class: 'muted also' }, `Also in ${toteList(also)}.`) : null,
     h('dl', { class: 'facts' },
       b.power ? [h('dt', {}, 'Power'), h('dd', {}, b.power)] : null,
       b.wifi ? [h('dt', {}, 'Wi-Fi'), h('dd', {}, b.wifi)] : null,
@@ -105,7 +110,7 @@ function renderTote(t) {
     items.length ? h('p', { class: 'muted small' }, `${keys.filter(k => checked.has(k)).length} of ${items.length} found`) : null,
     bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => {
       const key = `${t.id}:${b.id}`;
-      return buildCard(b, cardOpen.has(key) ? cardOpen.get(key) : bs.length === 1, key);
+      return buildCard(b, cardOpen.has(key) ? cardOpen.get(key) : bs.length === 1, key, t.id);
     })] : null,
     h('div', { class: 'btns' },
       h('button', { type: 'button', class: 'btn ghost', onclick: () => editTote(t) }, 'Edit'),
@@ -180,7 +185,7 @@ function renderBuilds() {
     h('h2', {}, 'Build cards'),
     h('p', { class: 'muted' }, 'One card per build: how it\'s powered, which firmware it runs, and the steps to bring it up again.'),
     h('ul', { class: 'list' }, builds().map(b => h('li', {}, h('a', { class: 'row', href: '#/build/' + b.id },
-      h('span', { class: 'main' }, h('span', { class: 't' }, b.name), h('span', { class: 's' }, seasonName(b.season) + (toteOf(b.id) ? ` · tote ${toteOf(b.id).id}` : ' · not in a tote'))),
+      h('span', { class: 'main' }, h('span', { class: 't' }, b.name), h('span', { class: 's' }, seasonName(b.season) + ' · ' + (totesOf(b.id).length ? toteList(totesOf(b.id)) : 'not in a tote'))),
       h('span', { class: 'meta' }, b.firmware || ''))))),
     wait ? h('p', { class: 'empty' }, wait) : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', disabled: !!wait, onclick: fresh(() => editBuild(null)) }, 'New build card')),
@@ -219,6 +224,13 @@ function uniqueBuildId(name) {
 }
 
 // ---------------------------------------------------------------- label
+// What a label lists: the builds inside first ('Light-up pumpkins (build)'), then the contents; six lines in all, the
+// sixth 'and 4 more' when there are more. (A tote set up with only its build cards, as a starter file makes them, would
+// otherwise print just its name.)
+function labelLines(t) {
+  const all = [...(t.builds || []).map(build).filter(Boolean).map(b => `${b.name} (build)`), ...(t.items || [])];
+  return all.length > 6 ? [...all.slice(0, 5), `and ${all.length - 5} more`] : all;
+}
 // The QR library comes the first time a label opens: until then a line says so, and the label is drawn again when it has.
 let qrAsked = false, qrFailed = false;
 function renderLabel(t) {
@@ -233,8 +245,7 @@ function renderLabel(t) {
       h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: () => print() }, 'Print'))),
     h('div', { class: 'label' },
       h('div', { class: 'label-num' }, t.id),
-      h('div', { class: 'label-body' }, h('b', {}, t.name), h('span', {}, seasonName(t.season)),
-        h('ul', {}, (t.items || []).slice(0, 6).map(i => h('li', {}, i)), (t.items || []).length > 6 ? h('li', {}, `and ${(t.items || []).length - 6} more`) : null)),
+      h('div', { class: 'label-body' }, h('b', {}, t.name), h('span', {}, seasonName(t.season)), h('ul', {}, labelLines(t).map(l => h('li', {}, l)))),
       h('div', { class: 'label-qr', html: qrSvg(tagUrl('t', t.id), { size: 120 }) })),
   ];
 }

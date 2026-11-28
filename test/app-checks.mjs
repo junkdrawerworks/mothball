@@ -154,6 +154,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
   await cardChecks({ page, base, assert });
+  await sharedChecks({ page, base, assert });
   await refusedChecks({ page, base, assert });
   await heldChecks({ ctx, base, assert });
   await ledgerChecks({ page, ctx, base, assert, problems });
@@ -191,6 +192,34 @@ async function cardChecks({ page, base, assert }) {
   await page.locator('.checks input').nth(0).check();
   await page.waitForSelector('text=1 of 4 found');
   assert.deepEqual(await cards(), [['Porch train', false]], 'a tick opened the one card again');
+}
+
+// A build card in two totes: Build cards names both, and each tote's page says where else it is. A tote with only build
+// cards (as the starter file sets them up) prints them on its label, builds first, six lines in all.
+async function sharedChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo');
+  await page.waitForSelector('.row .num');
+  await page.evaluate(() => {
+    const { ledger } = window.__mothball;
+    ledger.put('totes', { ...ledger.doc('totes', '02'), builds: ['porch-train', 'pumpkins'] });
+    ledger.put('totes', { id: '07', name: 'Porch scarecrows', season: 'halloween', place: 'Attic', items: [], builds: ['pumpkins', 'porch-web'] });
+    ledger.put('totes', { id: '08', name: 'Garlands', season: 'christmas', items: ['Garland 1', 'Garland 2', 'Garland 3', 'Garland 4', 'Garland 5', 'Garland 6'], builds: ['porch-train'] });
+  });
+  await page.evaluate(() => { location.hash = '#/builds'; });
+  await page.waitForSelector('.list .row');
+  assert.deepEqual(await page.locator('.list .row .s').allTextContents(), ['Halloween · totes 01, 02, 07', 'Halloween · totes 01, 07', 'Christmas · totes 02, 08'],
+    'Build cards names only the first tote a card is in');
+  await page.evaluate(() => { location.hash = '#02'; });
+  await page.waitForSelector('.tape >> text=Porch train');
+  assert.deepEqual(await page.locator('details.build').evaluateAll(ds => ds.map(d => [d.querySelector('summary b').textContent, d.querySelector('.also')?.textContent || ''])),
+    [['Porch train', 'Also in tote 08.'], ['Light-up pumpkins', 'Also in totes 01, 07.']]);
+  await page.evaluate(() => { location.hash = '#/label/07'; });
+  await page.waitForSelector('.label-qr svg');
+  assert.deepEqual(await page.locator('.label-body li').allTextContents(), ['Light-up pumpkins (build)', 'Porch spider web (build)'], 'a tote with only builds prints only its name');
+  await page.evaluate(() => { location.hash = '#/label/08'; });
+  await page.waitForSelector('.label-body >> text=Garlands');
+  assert.deepEqual(await page.locator('.label-body li').allTextContents(), ['Porch train (build)', 'Garland 1', 'Garland 2', 'Garland 3', 'Garland 4', 'and 2 more']);
 }
 
 // A Save the app refuses (a number another tote has) keeps the sheet open with everything typed, says why above the

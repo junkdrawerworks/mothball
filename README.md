@@ -12,9 +12,9 @@
 ## How it works
 
 - **Totes.** Numbered like the marker on the box. Pack and unpack dates, where it lives, and a moving-box number while it travels.
-- **Build cards.** One per build, shared by any tote it goes in.
+- **Build cards.** One per build, shared by any tote it goes in: Build cards names each tote a card is in, and a tote's page says where else it is.
 - **A note to next year.** "I packed it" asks what broke or ran out, and the tote shows it at the top next time.
-- **Labels.** A printable card with the number, the contents and a QR code, to tape over the sticker.
+- **Labels.** A printable card with the number, the builds and contents (six lines), and a QR code, to tape over the sticker.
 - **Switchboard.** Records live in your Switchboard ledger (a Google Sheet you own), so they follow you between the phone and the laptop. Connect from [tag.junkdrawer.works](https://tag.junkdrawer.works/).
 
 ## Running it
