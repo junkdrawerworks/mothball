@@ -1,5 +1,5 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
-import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, loadQr, today, lines, held, sampleLink, onRoute } from './kit/ui.js';
+import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, loadQr, today, lines, held, sampleLink, onRoute, saveFile, bringBack } from './kit/ui.js';
 import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
@@ -52,23 +52,41 @@ function renderHome() {
     }),
     !list.length || wait ? h('p', { class: 'empty' }, wait || 'No totes yet.') : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', disabled: !!wait, onclick: fresh(() => editTote(null)) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),
-      h('button', { type: 'button', class: 'btn ghost', disabled: !!wait, onclick: importFile }, 'Import')),
+      h('button', { type: 'button', class: 'btn ghost', disabled: !!wait, onclick: importFile }, 'Import'),
+      h('button', { type: 'button', class: 'btn ghost', disabled: !!wait, onclick: saveCopy }, 'Save a copy')),
   ];
+}
+
+// Save a copy: every tote and build card as a file Import reads back ({ copy: { app, saved }, builds, totes }), for a way
+// back after a mistake (a tote's list cleared, a card deleted).
+const plain = d => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith('_')));
+function saveCopy() {
+  const name = `mothball-copy-${today()}.json`, t = totes(), b = builds();
+  saveFile(name, { copy: { app: 'mothball', saved: new Date().toISOString() }, builds: b.map(plain), totes: t.map(plain) });
+  toast(`Saved ${name}: ${t.length} ${t.length === 1 ? 'tote' : 'totes'} and ${b.length} build ${b.length === 1 ? 'card' : 'cards'}. Import reads it back.`);
 }
 
 // A JSON file of { builds: [...], totes: [...] }. It only fills in (mergeImport): a record new to this phone is added,
 // one here gets what's blank in it and the file's new lines, and nothing typed here is blanked or replaced. A record
-// deleted here stays deleted, and one the file has in the wrong shape is skipped and named.
+// deleted here stays deleted, and one the file has in the wrong shape is skipped and named. A copy from Save a copy is a
+// way back after a mistake: a tote's list gets back the lines it had, and the totes and cards deleted here since it was
+// saved are offered back, each ticked.
 function importFile() {
   const input = h('input', { type: 'file', accept: '.json,application/json' });
   input.addEventListener('change', async () => {
     if (!COLLS.every(c => ledger.synced(c))) { toast(STILL_LOADING, 'bad'); return; }
     await ledger.catchUp(COLLS);
-    let merged;
-    try { merged = mergeImport(JSON.parse(await input.files[0].text()), (c, id) => ledger.doc(c, id), (c, id) => ledger.gone(c, id)); }
-    catch { toast('That file isn\'t a Mothball import.', 'bad'); return; }
+    let merged, copy;
+    try {
+      const data = JSON.parse(await input.files[0].text());
+      copy = data?.copy?.app === 'mothball' ? data.copy : null;
+      merged = mergeImport(data, (c, id) => ledger.doc(c, id), (c, id) => ledger.gone(c, id), { back: !!copy });
+    } catch { toast('That file isn\'t a Mothball import.', 'bad'); return; }
+    const label = ([coll, d]) => coll === 'totes' ? `Tote ${d.id}: ${d.name}` : `${d.name} (build card)`;
+    const back = merged.back.length ? await bringBack(merged.back.map(r => ({ key: r[0] + '/' + r[1].id, label: label(r) })), copy.saved, [merged.back.length === 1 && merged.back[0][0] === 'totes' ? 'tote' : merged.back.length === 1 ? 'build card' : 'record', 'records']) : [];
     for (const [coll, doc] of merged.puts) ledger.put(coll, doc);
-    toast(importSummary(merged.res, ['record', 'records']), merged.res.skipped.length ? 'bad' : ''); render();
+    for (const [coll, doc] of merged.back) if (back.includes(coll + '/' + doc.id)) ledger.put(coll, doc);
+    toast(importSummary({ ...merged.res, back: back.length, gone: merged.res.gone + merged.back.length - back.length }, ['record', 'records']), merged.res.skipped.length ? 'bad' : ''); render();
   });
   input.click();
 }

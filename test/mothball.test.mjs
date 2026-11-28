@@ -75,3 +75,16 @@ test('the QR library is not on the page: only the screen that draws codes loads 
   const sw = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
   assert.match(sw.match(/SHELL = \[([^\]]*)\]/)[1], /'js\/kit\/qrcode\.js'/, 'printing offline needs qrcode.js in the offline copy');
 });
+
+test('a saved copy imported: records deleted here since are offered back whole, not left out', () => {
+  const copy = { copy: { app: 'mothball', saved: '2026-11-20T15:00:00Z' }, builds: [{ id: 'sleigh', name: 'Light-up sleigh', bringup: 'Plug in the base' }],
+    totes: [{ id: '07', name: 'Garlands', items: ['Garland', 'Magnets'], builds: ['sleigh'] }, { id: '09', name: 'Fans', items: ['Fan'] }] };
+  const here = { 'totes/07': { id: '07', name: 'Garlands', items: [], builds: ['sleigh'] } }, gone = (c, id) => (c === 'totes' && id === '09') || (c === 'builds' && id === 'sleigh');
+  const r = mergeImport(copy, (c, id) => here[c + '/' + id] || null, gone, { back: true });
+  assert.deepEqual(r.back, [['builds', copy.builds[0]], ['totes', copy.totes[1]]]);
+  assert.deepEqual(r.puts, [['totes', { id: '07', name: 'Garlands', items: ['Garland', 'Magnets'], builds: ['sleigh'] }]]);
+  assert.equal(r.res.gone, 0);
+  // the same file without back (an import file, not a copy): deleted stays deleted, as before
+  const plain = mergeImport(copy, (c, id) => here[c + '/' + id] || null, gone);
+  assert.deepEqual([plain.back, plain.res.gone], [[], 2]);
+});

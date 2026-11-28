@@ -1,4 +1,5 @@
 // Mothball's own checks, run by test/e2e.mjs on a phone-sized page.
+import { readFile } from 'node:fs/promises';
 const fakeNfc = () => { window.__nfc = { writes: [] }; window.NDEFReader = class { async write(m) { window.__nfc.writes.push(m.records[0].data); } async scan() {} }; };
 export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.match(await page.locator('#app').innerText(), /connect first/i);
@@ -155,6 +156,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(t08, null, 'a tote deleted here came back');
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
+  await copyChecks({ page, base, assert });
   await homeLineChecks({ page, base, assert });
   await pickChecks({ page, base, assert });
   await reusedCardChecks({ page, base, assert });
@@ -177,6 +179,50 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
 
 // A sticker t/1 for a tote that's 01 (the ledger script mends a tote typed as 1 under its first version to 01) opens
 // tote 01, not "Set up tote 1"; a number with no tote of either kind is offered as before.
+// Save a copy, then mistakes (a tote's list cleared, a tote and a build card deleted), then the copy imported: the list
+// gets its lines back, and the tote and card deleted since are offered back, each ticked; one left unticked stays deleted.
+async function copyChecks({ page, base, assert }) {
+  await page.evaluate(() => { location.hash = ''; });
+  await page.waitForSelector('.row >> text=Garlands and the sleigh');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Save a copy')]);
+  assert.match(dl.suggestedFilename(), /^mothball-copy-\d{4}-\d{2}-\d{2}\.json$/);
+  const copy = JSON.parse(await readFile(await dl.path(), 'utf8'));
+  const here = await page.evaluate(() => ({ totes: window.__mothball.ledger.docs('totes').length, builds: window.__mothball.ledger.docs('builds').length }));
+  assert.equal(copy.copy.app, 'mothball');
+  assert.ok(Number.isFinite(Date.parse(copy.copy.saved)), 'the copy doesn\'t say when it was saved');
+  assert.deepEqual([copy.totes.length, copy.builds.length], [here.totes, here.builds]);
+  assert.deepEqual([...copy.totes, ...copy.builds].filter(d => Object.keys(d).some(k => k.startsWith('_'))), [], 'the ledger\'s own fields went in the copy');
+  await page.waitForSelector(`.toast.show >> text=Saved ${dl.suggestedFilename()}: ${here.totes} totes and ${here.builds} build cards. Import reads it back.`);
+  // the mistakes
+  await page.evaluate(() => { const { ledger, render } = window.__mothball; ledger.put('totes', { ...ledger.doc('totes', '07'), items: [] }); ledger.del('totes', '09'); ledger.del('builds', 'sleigh'); render(); });
+  await page.waitForFunction(() => ![...document.querySelectorAll('.row .t')].some(t => t.textContent === 'Fans'));
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('text=Import')]);
+  await chooser.setFiles({ name: dl.suggestedFilename(), mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(copy)) });
+  const ask = page.getByRole('dialog', { name: 'Bring back 2 records?' });
+  await ask.waitFor();
+  assert.match(await ask.locator('form > div:not(.sheet-bar) > p').textContent(), /^These records were deleted here since this copy was saved \([A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [ap]m\)\. Untick any to leave deleted\.$/);
+  assert.deepEqual(await ask.locator('.pick span').allTextContents(), ['Light-up sleigh (build card)', 'Tote 09: Fans']);
+  assert.deepEqual(await ask.locator('.pick input').evaluateAll(bs => bs.map(b => b.checked)), [true, true]);
+  assert.deepEqual(await ask.locator('.sheet-bar button').allTextContents(), ['Leave deleted', 'Bring back']);
+  await ask.locator('.pick', { hasText: 'Light-up sleigh' }).locator('input').uncheck();
+  await ask.locator('button', { hasText: 'Bring back' }).click();
+  await page.waitForSelector('.toast.show >> text=Filled in 1, brought back 1; left out 1 you deleted.');
+  const [t07, t09, sleigh] = await page.evaluate(() => [window.__mothball.ledger.doc('totes', '07'), window.__mothball.ledger.doc('totes', '09'), window.__mothball.ledger.doc('builds', 'sleigh')]);
+  assert.deepEqual(t07.items, ['Garland (3)', '2.5 m extension lead', 'Magnets', 'Spare magnets'], 'the cleared list didn\'t come back');
+  assert.deepEqual([t09?.name, t09?.items], ['Fans', ['Fan', 'Cooler']], 'the deleted tote didn\'t come back whole');
+  assert.equal(sleigh, null, 'a card left unticked came back');
+  await page.waitForSelector('.row >> text=Fans');
+  // imported again with Leave deleted: nothing else comes back
+  const [again] = await Promise.all([page.waitForEvent('filechooser'), page.click('text=Import')]);
+  await again.setFiles({ name: dl.suggestedFilename(), mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(copy)) });
+  const one = page.getByRole('dialog', { name: 'Bring back Light-up sleigh (build card)?' });
+  await one.waitFor();
+  assert.equal(await one.locator('form > p').textContent().then(t => t.replace(/\(.*\)/, '(…)')), 'This build card was deleted here since this copy was saved (…).');
+  await one.locator('button', { hasText: 'Leave deleted' }).click();
+  await page.waitForSelector('.toast.show >> text=Nothing new in the file; left out 1 you deleted.');
+  assert.equal(await page.evaluate(() => window.__mothball.ledger.doc('builds', 'sleigh')), null);
+}
+
 async function oneDigitChecks({ page, base, assert }) {
   await page.goto('about:blank');
   await page.goto(base + '?demo#1');
@@ -466,12 +512,12 @@ async function secondDevice({ ctx, base, assert }) {
     await p.goto(base);
     await p.waitForSelector('.empty >> text=Loading…');
     const off = () => p.locator('#app .btns button').evaluateAll(bs => bs.map(b => [b.textContent, b.disabled]));
-    assert.deepEqual(await off(), [['New tote', true], ['Import', true]], 'New tote or Import offered before the ledger answered');
+    assert.deepEqual(await off(), [['New tote', true], ['Import', true], ['Save a copy', true]], 'New tote, Import or Save a copy offered before the ledger answered');
     await p.goto(base + '#/builds');
     assert.equal(await p.locator('button', { hasText: 'New build card' }).isDisabled(), true, 'New build card offered before the ledger answered');
     await p.goto(base);
     await p.waitForSelector('.row >> text=Porch lights', { timeout: 10000 });
-    assert.deepEqual(await off(), [['New tote', false], ['Import', false]]);
+    assert.deepEqual(await off(), [['New tote', false], ['Import', false], ['Save a copy', false]]);
     assert.equal(await p.locator('.empty').count(), 0);
     await p.click('text=New tote');
     assert.equal(await p.inputValue('#f-id'), '02', 'New tote offered a number the sheet already has');

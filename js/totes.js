@@ -57,10 +57,11 @@ export function checkImport(coll, d) {
 // An import file ({ builds: [...], totes: [...] }) over this phone's records. here(coll, id) is the record here,
 // gone(coll, id) true for one deleted here. Each record only fills in (the kit's fillIn): nothing typed here is blanked
 // or replaced, contents and build cards gain the file's lines they don't have, and a record deleted here stays deleted.
-// Returns { puts: [[coll, doc]], res } (res for the kit's importSummary). Throws on a file that isn't this shape.
-export function mergeImport(data, here, gone) {
+// Returns { puts: [[coll, doc]], res, back } (res for the kit's importSummary). Throws on a file that isn't this shape.
+// With back (the file is a saved copy), a record deleted here goes in back, whole ([coll, doc]), for the app to offer.
+export function mergeImport(data, here, gone, { back = false } = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data) || (data.builds == null && data.totes == null)) throw new Error('not a Mothball import');
-  const puts = [], mine = {}, res = { added: 0, filled: 0, kept: 0, gone: 0, skipped: [] };
+  const puts = [], mine = {}, res = { added: 0, filled: 0, kept: 0, gone: 0, skipped: [] }, offer = [];
   for (const [coll, list] of [['builds', data.builds], ['totes', data.totes]]) {
     if (list == null) continue;
     if (!Array.isArray(list)) throw new Error('not a Mothball import');
@@ -68,7 +69,10 @@ export function mergeImport(data, here, gone) {
       const c = checkImport(coll, d);
       if (c.why) { res.skipped.push(c.why); continue; }
       const id = c.rec.id, key = coll + '/' + id;
-      if (gone(coll, id) && !mine[key]) { res.gone++; continue; }
+      if (gone(coll, id) && !mine[key]) {
+        if (back && typeof c.rec.name === 'string' && c.rec.name.trim() && !refusal(c.rec) && !offer.some(([k, d]) => k === coll && d.id === id)) offer.push([coll, c.rec]); else res.gone++;
+        continue;
+      }
       const was = mine[key] || here(coll, id);
       const { doc, filled, kept } = was ? fillIn(was, c.rec) : { doc: c.rec, filled: [], kept: [] };
       if (typeof doc.name !== 'string' || !doc.name.trim()) { res.skipped.push(`"${id}" (no name)`); continue; }
@@ -78,5 +82,5 @@ export function mergeImport(data, here, gone) {
       if (!was || filled.length) { mine[key] = doc; puts.push([coll, doc]); }
     }
   }
-  return { puts, res };
+  return { puts, res, back: offer };
 }
