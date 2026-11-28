@@ -4,7 +4,7 @@ import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } 
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
-import { isOut, comingDown, tickKeys, findIn, mergeImport } from './totes.js';
+import { isOut, comingDown, tickKeys, findIn, lineMoved, cardMoved, mergeImport } from './totes.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 watchConnectLinks('mothball', toast);
@@ -92,9 +92,10 @@ function importFile() {
 }
 
 // ---------------------------------------------------------------- one tote
-// here: the tote whose page it's on, so a card shared with another tote says which ('Also in tote 02').
+// here: the tote whose page it's on, so a card shared with another tote says which ('Also in tote 02'), and it can be
+// moved to another tote.
 function buildCard(b, open = false, key = '', here = null) {
-  const also = here ? totesOf(b.id).filter(t => t.id !== here) : [];
+  const also = here ? totesOf(b.id).filter(t => t.id !== here) : [], movable = here && totes().some(t => t.id !== here);
   return h('details', { class: 'build card', open, ontoggle: key ? e => cardOpen.set(key, e.currentTarget.open) : null },
     h('summary', {}, h('b', {}, b.name), b.firmware ? h('span', { class: 'chip' }, b.firmware) : null),
     also.length ? h('p', { class: 'muted also' }, `Also in ${toteList(also)}.`) : null,
@@ -107,13 +108,14 @@ function buildCard(b, open = false, key = '', here = null) {
     lines(b.packing).length ? [h('h3', {}, 'Packing it'), h('ul', {}, lines(b.packing).map(l => h('li', {}, l)))] : null,
     h('div', { class: 'btns' },
       b.guide ? h('a', { class: 'btn ghost', href: b.guide, target: '_blank', rel: 'noopener' }, 'Build guide') : null,
-      h('a', { class: 'btn ghost', href: '#/build/' + b.id }, 'Edit card')));
+      h('a', { class: 'btn ghost', href: '#/build/' + b.id }, 'Edit card'),
+      movable ? h('button', { type: 'button', class: 'btn ghost', 'aria-label': `Move ${b.name} to another tote`, onclick: fresh(() => moveCard(here, b)) }, 'Move') : null));
 }
 
 function renderTote(t) {
   const items = t.items || [], keys = tickKeys(t.id, items);
   const bs = (t.builds || []).map(build).filter(Boolean);
-  const out = isOut(t), away = !out && !!t.packed;
+  const out = isOut(t), away = !out && !!t.packed, movable = totes().some(x => x.id !== t.id);
   // the press that comes next is the filled one: unpacking a tote that's put away, packing one that's out
   const pack = h('button', { type: 'button', class: away ? 'btn ghost' : 'btn', onclick: () => packed(t) }, 'I packed it');
   const unpack = h('button', { type: 'button', class: away ? 'btn' : 'btn ghost', onclick: () => unpacked(t) }, 'I unpacked it');
@@ -128,9 +130,10 @@ function renderTote(t) {
     h('h2', {}, 'In this tote'),
     items.length ? h('ul', { class: 'list checks' }, items.map((it, i) => {
       const k = keys[i];
-      return h('li', {}, h('label', { class: 'row check' + (checked.has(k) ? ' dim' : '') },
+      return h('li', { class: movable ? 'moves' : null }, h('label', { class: 'row check' + (checked.has(k) ? ' dim' : '') },
         h('input', { type: 'checkbox', checked: checked.has(k), onchange: e => { e.target.checked ? checked.add(k) : checked.delete(k); render(); } }),
-        h('span', { class: 'main' }, h('span', { class: 't' }, it))));
+        h('span', { class: 'main' }, h('span', { class: 't' }, it))),
+        movable ? h('button', { type: 'button', class: 'linkish move', 'aria-label': `Move ${it} to another tote`, onclick: fresh(() => moveLine(t, i, it)) }, 'Move') : null);
     })) : h('p', { class: 'muted' }, 'Nothing listed.'),
     items.length ? h('p', { class: 'muted small' }, `${keys.filter(k => checked.has(k)).length} of ${items.length} found`) : null,
     bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => {
@@ -159,6 +162,32 @@ function unpacked(t) {
   ledger.put('totes', { ...(tote(t.id) || t), unpacked: today(), out: true });
   toast(`Tote ${t.id} is out.`); render();
 }
+// Repacking: a contents line or a build card moved to another tote, picked from the others ('02 Christmas: windows'),
+// both totes saved together (totes.js lineMoved, cardMoved), so nothing is retyped and nothing ends up in both. Each
+// starts from the ledger's latest (fresh), and from the totes as they are when Move is pressed.
+async function moveTo(title, fromId, plan) {
+  const options = totes().filter(x => x.id !== fromId).map(x => [x.id, `${x.id} ${x.name}`]);
+  const both = v => { const from = tote(fromId), to = tote(v.to); return from && to ? plan(from, to) : null; };
+  const v = await sheet({ title, ok: 'Move', fields: [{ name: 'to', label: 'To', type: 'select', value: '', options: [['', 'Pick a tote'], ...options] }],
+    check: v => !v.to ? { field: 'to', line: 'Pick the tote it goes in.' } : both(v) ? refusedLine(both(v)[1]) : '' });
+  if (!v || !v.to) return null;
+  const saved = both(v);
+  if (!saved) { toast(tote(v.to) ? `That isn't in tote ${fromId} any more.` : `Tote ${v.to} was deleted on another phone or laptop.`, 'bad'); render(); return null; }
+  for (const doc of saved) ledger.put('totes', doc);
+  return saved;
+}
+async function moveLine(t, i, text) {
+  const saved = await moveTo(`Move ${text}`, t.id, (from, to) => lineMoved(from, to, i, text));
+  if (!saved) return;
+  checked.delete(tickKeys(t.id, t.items || [])[i]);
+  toast(`${text} moved to tote ${saved[1].id}.`); render();
+}
+async function moveCard(fromId, b) {
+  const saved = await moveTo(`Move ${b.name}`, fromId, (from, to) => cardMoved(from, to, b.id));
+  if (!saved) return;
+  toast(`${b.name} moved to tote ${saved[1].id}.`); render();
+}
+
 // The note was seen to (the new supply bought): it goes, after a yes.
 async function noteDone(t) {
   if (!await confirmSheet('Clear the note?', `"${t.note}" goes. A new one can go in Edit, or when you pack it.`, 'Clear it', { danger: true })) return;

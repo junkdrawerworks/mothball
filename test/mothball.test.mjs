@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { monthsUntil, seasonName } from '../js/sample.js';
-import { isOut, comingDown, toteNames, tickKeys, findIn, checkImport, mergeImport } from '../js/totes.js';
+import { isOut, comingDown, toteNames, tickKeys, findIn, lineMoved, cardMoved, checkImport, mergeImport } from '../js/totes.js';
 
 test('months until a season comes round', () => {
   const nov = new Date(2026, 10, 26);
@@ -38,6 +38,22 @@ test('the season notice lists only the totes still put away, in words that fit h
 test('a tick stays on its thing when the list changes', () => {
   assert.deepEqual(tickKeys('04', ['Lights', 'Spare fuses', 'Lights']), ['04:Lights', '04:Spare fuses', '04:Lights#2']);
   assert.equal(tickKeys('04', ['Spare fuses', 'Timer'])[0], tickKeys('04', ['Lights', 'Spare fuses'])[1], 'line 1 taken out');
+});
+test('a line or a card moved to another tote: both totes, together, and nothing listed twice', () => {
+  const a = { id: '01', name: 'Porch lights', items: ['Light strings (4)', 'Timer plug', 'Clips', 'Timer plug'], builds: ['sleigh', 'train'] };
+  const b = { id: '02', name: 'Christmas: windows', items: ['Window candles'], builds: ['train'] };
+  assert.deepEqual(lineMoved(a, b, 1, 'Timer plug'), [{ ...a, items: ['Light strings (4)', 'Clips', 'Timer plug'] }, { ...b, items: ['Window candles', 'Timer plug'] }]);
+  assert.deepEqual(lineMoved(a, b, 3, 'Timer plug')[0].items, ['Light strings (4)', 'Timer plug', 'Clips'], 'the second of two the same');
+  // the list changed on another device meanwhile: the line by its words, or nothing
+  assert.deepEqual(lineMoved({ ...a, items: ['Timer plug', 'Clips'] }, b, 2, 'Clips')[0].items, ['Timer plug']);
+  assert.equal(lineMoved({ ...a, items: ['Clips'] }, b, 1, 'Timer plug'), null);
+  assert.equal(lineMoved(a, a, 1, 'Timer plug'), null, 'to the same tote');
+  assert.deepEqual(lineMoved({ id: '01', name: 'x', items: ['Fan'] }, { id: '03', name: 'y' }, 0, 'Fan')[1].items, ['Fan'], 'a tote with no list yet');
+  assert.deepEqual(cardMoved(a, b, 'sleigh'), [{ ...a, builds: ['train'] }, { ...b, builds: ['train', 'sleigh'] }]);
+  assert.deepEqual(cardMoved(a, b, 'train'), [{ ...a, builds: ['sleigh'] }, b], 'a card the other tote has already');
+  assert.equal(cardMoved(b, a, 'sleigh'), null, 'a card that isn\'t in it');
+  assert.deepEqual(cardMoved(a, { id: '03', name: 'y' }, 'sleigh')[1].builds, ['sleigh'], 'a tote with no cards yet');
+  assert.deepEqual([a.items.length, a.builds.length, b.items.length], [4, 2, 1], 'the totes given were changed');
 });
 test('Do I have…: a tote by its name, its contents lines and its build cards, each under its tote, then cards in no tote', () => {
   const totes = [

@@ -53,6 +53,22 @@ export function findIn(q, totes, cards) {
   return out;
 }
 
+// Moving a contents line or a build card to another tote: both totes as they're saved, together, [from, to], or null
+// when it isn't in `from` any more (moved or deleted on another device while the sheet was open). The line is the one
+// at index i if it still reads the same, else the first that does, and goes at the end of `to`'s contents; a card `to`
+// already has isn't listed in it twice.
+export function lineMoved(from, to, i, text) {
+  const items = [...(from.items || [])], at = items[i] === text ? i : items.indexOf(text);
+  if (at < 0 || from.id === to.id) return null;
+  items.splice(at, 1);
+  return [{ ...from, items }, { ...to, items: [...(to.items || []), text] }];
+}
+export function cardMoved(from, to, card) {
+  const had = to.builds || [];
+  if (!(from.builds || []).includes(card) || from.id === to.id) return null;
+  return [{ ...from, builds: from.builds.filter(b => b !== card) }, { ...to, builds: had.includes(card) ? had : [...had, card] }];
+}
+
 // ---- import
 // A record from an import file, checked before it goes in: { rec } (its id as a sticker reads it, its lists as lists of
 // lines) or { why }, naming it for the toast. A tote's number follows New tote's rule (letters, digits and dashes, up
