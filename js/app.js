@@ -29,6 +29,11 @@ const COLLS = ['totes', 'builds'];
 const fresh = then => e => held(e.currentTarget, ledger.catchUp(COLLS)).then(then);
 
 // ---------------------------------------------------------------- home
+// How long since, in a tote's line under its name ('Attic, by the hatch · packed 5 wk ago', '· out since Nov 2'), so the
+// name has the row's width (beside a column of 'packed 10 mo ago' most names ran to two lines). The row keeps an 'out'
+// chip for a tote that's out.
+const shortDay = day => { const s = dayText(day), y = `, ${new Date().getFullYear()}`; return s.endsWith(y) ? s.slice(0, -y.length) : s; };
+const since = t => isOut(t) ? (t.unpacked ? 'out since ' + shortDay(t.unpacked) : '') : t.packed ? 'packed ' + agoText(t.packed) : '';
 function renderHome() {
   const list = totes();
   const order = SEASONS.map(s => s[0]).sort((a, b) => monthsUntil(a) - monthsUntil(b));
@@ -40,8 +45,8 @@ function renderHome() {
       return in_.length ? h('section', {}, h('h2', {}, seasonName(k)), h('ul', { class: 'list' }, in_.map(t =>
         h('li', {}, h('a', { class: 'row', href: '#' + t.id },
           h('span', { class: 'num' }, t.id),
-          h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, t.place || 'No shelf yet')),
-          h('span', { class: 'meta' }, isOut(t) ? 'out' : t.packed ? 'packed ' + agoText(t.packed) : '')))))) : null;
+          h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, [t.place || 'No shelf yet', since(t)].filter(Boolean).join(' · '))),
+          isOut(t) ? h('span', { class: 'meta' }, h('span', { class: 'chip' }, 'out')) : null))))) : null;
     }),
     !list.length || wait ? h('p', { class: 'empty' }, wait || 'No totes yet.') : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', disabled: !!wait, onclick: fresh(() => editTote(null)) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),

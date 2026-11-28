@@ -31,7 +31,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   // packed today reads that way at home, not "packed today ago"
   await page.click('text=‹ All totes');
   await page.waitForSelector('.row .num');
-  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'packed today');
+  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.s').textContent(), 'Basement, rack by the door, middle · packed today');
+  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').count(), 0, 'a column beside the name of a tote that isn\'t out');
   // that was a mistake: I unpacked it the same day wins
   await page.click('text=Porch train >> nth=0');
   await page.click('text=I unpacked it');
@@ -42,7 +43,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.deepEqual([t02.packed === t02.unpacked, t02.out], [true, true]);
   await page.click('text=‹ All totes');
   await page.waitForSelector('.row .num');
-  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta').textContent(), 'out');
+  assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta .chip').textContent(), 'out');
+  assert.match(await page.locator('.row', { hasText: '02' }).locator('.s').textContent(), /^Basement, rack by the door, middle · out since [A-Z][a-z]{2} \d{1,2}$/);
   // tote 01: the note to next year is in Edit, and Done clears it
   await page.click('text=Pumpkins and the porch web');
   await page.click('#app button:text-is("Edit")');
@@ -153,6 +155,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(t08, null, 'a tote deleted here came back');
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
+  await homeLineChecks({ page, base, assert });
   await cardChecks({ page, base, assert });
   await sharedChecks({ page, base, assert });
   await refusedChecks({ page, base, assert });
@@ -167,6 +170,26 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await (await import('./kit-checks.mjs')).targetsAudit({ browser: ctx.browser(), base, assert, hashes: ['', '#01', '#02', '#/builds', '#/build/pumpkins', '#/label/01', '#09'] });
   await backKeepsPlace({ browser: ctx.browser(), base, assert, app: 'mothball', colls: { builds: [],
     totes: Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1).padStart(2, '0'), name: `Tote of things ${i + 1}`, season: 'christmas', place: 'Garage', items: [], builds: [] })) } });
+}
+
+// The home page at 390 px: a tote's name has the row's width, its age in the line under it, so names like these stay
+// on one line; and one put away last year says how long.
+async function homeLineChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo');
+  await page.waitForSelector('.row .num');
+  await page.evaluate(() => {
+    const { ledger, render } = window.__mothball, ago = d => { const t = new Date(); t.setDate(t.getDate() - d); return t.toISOString().slice(0, 10); };
+    for (const [id, name, place, d] of [['15', 'Tote of beach gear 15', 'Attic, by the hatch', 35], ['16', 'Inflatable snowman', 'Garage, top shelf, left', 300]])
+      ledger.put('totes', { id, name, season: 'summer', place, packed: ago(d), items: [], builds: [] });
+    render();
+  });
+  const line = await page.locator('.row', { hasText: 'Tote of beach gear 15' }).evaluate(r => {
+    const t = r.querySelector('.t'); return { h: t.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(t).lineHeight), s: r.querySelector('.s').textContent, meta: !!r.querySelector('.meta') };
+  });
+  assert.ok(line.h < line.lh * 1.5, `"Tote of beach gear 15" runs to ${Math.round(line.h / line.lh)} lines at 390 px`);
+  assert.deepEqual([line.s, line.meta], ['Attic, by the hatch · packed 5 wk ago', false]);
+  assert.match(await page.locator('.row', { hasText: 'Inflatable snowman' }).locator('.s').textContent(), /^Garage, top shelf, left · packed (9|10) mo ago$/);
 }
 
 // A tick draws the tote's page again: a build card opened to read its steps stays open, and one closed stays closed.
