@@ -11,6 +11,9 @@ watchConnectLinks('mothball', toast);
 const ledger = new Ledger('mothball', { demo: demo ? SAMPLE : null });
 const app = $('#app');
 const checked = new Set(); // contents ticked while unpacking (tickKeys): this visit only
+// Build cards opened or closed on a tote's page ('01:pumpkins' -> open), so the redraw a tick makes keeps each as it was
+// (a card read while unpacking stayed open only until the next tick). One not touched yet: open when it's the only one.
+const cardOpen = new Map();
 
 const totes = () => ledger.docs('totes').sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 const builds = () => ledger.docs('builds').sort((a, b) => a.name.localeCompare(b.name));
@@ -62,8 +65,8 @@ function importFile() {
 }
 
 // ---------------------------------------------------------------- one tote
-function buildCard(b, open = false) {
-  return h('details', { class: 'build card', open },
+function buildCard(b, open = false, key = '') {
+  return h('details', { class: 'build card', open, ontoggle: key ? e => cardOpen.set(key, e.currentTarget.open) : null },
     h('summary', {}, h('b', {}, b.name), b.firmware ? h('span', { class: 'chip' }, b.firmware) : null),
     h('dl', { class: 'facts' },
       b.power ? [h('dt', {}, 'Power'), h('dd', {}, b.power)] : null,
@@ -100,7 +103,10 @@ function renderTote(t) {
         h('span', { class: 'main' }, h('span', { class: 't' }, it))));
     })) : h('p', { class: 'muted' }, 'Nothing listed.'),
     items.length ? h('p', { class: 'muted small' }, `${keys.filter(k => checked.has(k)).length} of ${items.length} found`) : null,
-    bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => buildCard(b, bs.length === 1))] : null,
+    bs.length ? [h('h2', {}, bs.length > 1 ? 'Builds inside' : 'Build inside'), bs.map(b => {
+      const key = `${t.id}:${b.id}`;
+      return buildCard(b, cardOpen.has(key) ? cardOpen.get(key) : bs.length === 1, key);
+    })] : null,
     h('div', { class: 'btns' },
       h('button', { type: 'button', class: 'btn ghost', onclick: () => editTote(t) }, 'Edit'),
       h('a', { class: 'btn ghost', href: '#/label/' + t.id }, 'Label')),

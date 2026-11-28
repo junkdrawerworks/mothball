@@ -153,6 +153,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(t08, null, 'a tote deleted here came back');
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
+  await cardChecks({ page, base, assert });
   await refusedChecks({ page, base, assert });
   await heldChecks({ ctx, base, assert });
   await ledgerChecks({ page, ctx, base, assert, problems });
@@ -165,6 +166,31 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await (await import('./kit-checks.mjs')).targetsAudit({ browser: ctx.browser(), base, assert, hashes: ['', '#01', '#02', '#/builds', '#/build/pumpkins', '#/label/01', '#09'] });
   await backKeepsPlace({ browser: ctx.browser(), base, assert, app: 'mothball', colls: { builds: [],
     totes: Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1).padStart(2, '0'), name: `Tote of things ${i + 1}`, season: 'christmas', place: 'Garage', items: [], builds: [] })) } });
+}
+
+// A tick draws the tote's page again: a build card opened to read its steps stays open, and one closed stays closed.
+async function cardChecks({ page, base, assert }) {
+  const cards = () => page.locator('details.build').evaluateAll(ds => ds.map(d => [d.querySelector('summary b').textContent, d.open]));
+  await page.goto('about:blank');
+  await page.goto(base + '?demo#01');
+  await page.waitForSelector('details.build');
+  assert.deepEqual(await cards(), [['Light-up pumpkins', false], ['Porch spider web', false]], 'two builds: both cards start closed');
+  await page.click('details.build summary >> text=Light-up pumpkins');
+  await page.locator('.checks input').nth(0).check();
+  await page.waitForSelector('text=1 of 4 found');
+  assert.deepEqual(await cards(), [['Light-up pumpkins', true], ['Porch spider web', false]], 'a tick closed the build card being read');
+  await page.click('details.build summary >> text=Light-up pumpkins');
+  await page.locator('.checks input').nth(1).check();
+  await page.waitForSelector('text=2 of 4 found');
+  assert.deepEqual(await cards(), [['Light-up pumpkins', false], ['Porch spider web', false]], 'a tick opened a card that was closed');
+  // one build: open to start with, and closed by hand it stays closed
+  await page.evaluate(() => { location.hash = '#02'; });
+  await page.waitForSelector('.tape >> text=Porch train');
+  assert.deepEqual(await cards(), [['Porch train', true]]);
+  await page.click('details.build summary >> text=Porch train');
+  await page.locator('.checks input').nth(0).check();
+  await page.waitForSelector('text=1 of 4 found');
+  assert.deepEqual(await cards(), [['Porch train', false]], 'a tick opened the one card again');
 }
 
 // A Save the app refuses (a number another tote has) keeps the sheet open with everything typed, says why above the
