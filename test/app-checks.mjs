@@ -157,6 +157,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
 
   await homeLineChecks({ page, base, assert });
   await pickChecks({ page, base, assert });
+  await oneDigitChecks({ page, base, assert });
   await cardChecks({ page, base, assert });
   await sharedChecks({ page, base, assert });
   await refusedChecks({ page, base, assert });
@@ -171,6 +172,19 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await (await import('./kit-checks.mjs')).targetsAudit({ browser: ctx.browser(), base, assert, hashes: ['', '#01', '#02', '#/builds', '#/build/pumpkins', '#/label/01', '#09'] });
   await backKeepsPlace({ browser: ctx.browser(), base, assert, app: 'mothball', colls: { builds: [],
     totes: Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1).padStart(2, '0'), name: `Tote of things ${i + 1}`, season: 'christmas', place: 'Garage', items: [], builds: [] })) } });
+}
+
+// A sticker t/1 for a tote that's 01 (the ledger script mends a tote typed as 1 under its first version to 01) opens
+// tote 01, not "Set up tote 1"; a number with no tote of either kind is offered as before.
+async function oneDigitChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo#1');
+  await page.waitForSelector('.tape >> text=Pumpkins and the porch web');
+  assert.equal(await page.evaluate(() => location.hash), '#01');
+  assert.equal(await page.locator('text=Set up tote 1').count(), 0);
+  await page.evaluate(() => { location.hash = '#3'; });
+  await page.waitForSelector('text=No tote 3 yet.');
+  assert.equal(await page.locator('button', { hasText: 'Set up tote 3' }).count(), 1);
 }
 
 // Edit tote: the build cards are a checklist of every card (name and season), the tote's ticked; two ticked and Save

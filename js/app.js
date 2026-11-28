@@ -278,6 +278,9 @@ function render() {
   else if (r.view === 'build') { const b = build(r.arg); body = b ? renderBuild(b) : [h('p', { class: 'empty' }, 'No such card.')]; }
   else if (r.view === 'label') { const t = tote(r.arg); body = t ? renderLabel(t) : [h('p', { class: 'empty' }, 'No such tote.')]; }
   else if (r.view === 'item') {
+    // A sticker written t/1 for a tote that's 01 now (typed as 1 on a sheet the ledger script's first version kept, which
+    // 1.1 mends to 01): that tote, not "Set up tote 1" beside it
+    if (!tote(r.id) && /^[0-9]$/.test(r.id) && tote('0' + r.id)) { history.replaceState(null, '', location.pathname + location.search + '#0' + r.id); render(); return; }
     const t = tote(r.id), wait = ledger.notReady(...COLLS);
     body = t ? renderTote(t) : [h('p', { class: 'crumb' }, h('a', { href: '#' }, '‹ All totes')), h('p', { class: 'empty' }, wait || `No tote ${r.id} yet.`),
       !wait ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', onclick: fresh(() => tote(r.id) ? render() : editTote({ id: r.id, name: '', items: [], builds: [] }).catch(() => {})) }, `Set up tote ${r.id}`)) : null];
