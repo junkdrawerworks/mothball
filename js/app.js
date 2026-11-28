@@ -232,10 +232,12 @@ async function editBuild(b) {
   ledger.put('builds', doc);
   go('#/build/' + doc.id); render();
 }
+// Not a deleted card's id either: totes keep the ids of cards since deleted (so FALSE in the sheet brings one back to
+// its totes), and a new card under that id would turn up in those totes without being ticked.
 function uniqueBuildId(name) {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'build';
   let id = base, n = 2;
-  while (build(id)) id = `${base}-${n++}`;
+  while (build(id) || ledger.gone('builds', id)) id = `${base}-${n++}`;
   return id;
 }
 

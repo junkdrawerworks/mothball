@@ -157,6 +157,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
 
   await homeLineChecks({ page, base, assert });
   await pickChecks({ page, base, assert });
+  await reusedCardChecks({ page, base, assert });
   await oneDigitChecks({ page, base, assert });
   await cardChecks({ page, base, assert });
   await sharedChecks({ page, base, assert });
@@ -205,6 +206,37 @@ async function pickChecks({ page, base, assert }) {
   await page.waitForSelector('h2 >> text=Builds inside');
   assert.deepEqual(await page.locator('details.build summary b').allTextContents(), ['Light-up pumpkins', 'Porch spider web']);
   assert.deepEqual(await page.evaluate(() => window.__mothball.ledger.doc('totes', '02').builds), ['pumpkins', 'porch-web']);
+}
+
+// A card ticked in a tote, then deleted (the tote keeps its id, by design, so FALSE in the sheet brings it back to its
+// totes), then a new card with the same name: the new one gets an id of its own, so it isn't in that tote unticked.
+async function reusedCardChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo#/builds');
+  await page.click('button:text-is("New build card")');
+  await page.fill('dialog[open] [name=name]', 'Porch lights');
+  await page.click('dialog[open] button[type=submit]');
+  await page.waitForFunction(() => location.hash === '#/build/porch-lights');
+  await page.evaluate(() => { location.hash = '#02'; });
+  await page.waitForSelector('.tape >> text=Porch train');
+  await page.click('#app button:text-is("Edit")');
+  await page.click('dialog[open] .pick >> text=Porch lights');
+  await page.click('dialog[open] button[type=submit]');
+  await page.waitForFunction(() => document.querySelectorAll('details.build').length === 2);
+  assert.deepEqual(await page.locator('details.build summary b').allTextContents(), ['Porch train', 'Porch lights']);
+  await page.evaluate(() => { location.hash = '#/build/porch-lights'; });
+  await page.click('#app button:text-is("Edit")');
+  await page.click('dialog[open] button:text-is("Delete")');
+  await page.click('dialog[open] button[type=submit]:text-is("Delete")');
+  await page.waitForFunction(() => location.hash === '#/builds' && !document.querySelector('dialog[open]'));
+  await page.click('button:text-is("New build card")');
+  await page.fill('dialog[open] [name=name]', 'Porch lights');
+  await page.click('dialog[open] button[type=submit]');
+  await page.waitForFunction(() => /^#\/build\//.test(location.hash) && !document.querySelector('dialog[open]'));
+  assert.equal(await page.evaluate(() => location.hash), '#/build/porch-lights-2', 'the new card took the deleted one\'s id');
+  await page.evaluate(() => { location.hash = '#02'; });
+  await page.waitForSelector('.tape >> text=Porch train');
+  assert.deepEqual(await page.locator('details.build summary b').allTextContents(), ['Porch train'], 'a new card appeared in a tote nobody ticked it in');
 }
 
 // The home page at 390 px: a tote's name has the row's width, its age in the line under it, so names like these stay
