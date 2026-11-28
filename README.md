@@ -5,8 +5,8 @@
 **What's in each seasonal tote, and how to bring every build in it back to life next year.** A sticker on each tote opens its page: the contents to tick off as you unpack, a card for each build inside (power, firmware, bring-up steps, how to point it at new Wi-Fi), and the note you left yourself when you packed it.
 
 <p align="center">
-  <img src="docs/phone-tote.png" width="250" alt="A tote: its shelf, last year's note, the contents to tick off, and the build card.">
-  <img src="docs/phone-home.png" width="250" alt="All totes by season, the next season first.">
+  <img src="docs/phone-tote.png" width="250" alt="A tote: its shelf, last year's note, and the contents to tick off, each with Move.">
+  <img src="docs/phone-home.png" width="250" alt="The Do I have box, then all totes by season, the next season first.">
 </p>
 
 ## How it works
