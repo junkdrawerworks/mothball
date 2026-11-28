@@ -1,5 +1,5 @@
 // Mothball: what's in each seasonal tote, and how to bring every build in it back to life next year.
-import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, today, lines, held, sampleLink, onRoute } from './kit/ui.js';
+import { $, h, mount, toast, sheet, confirmSheet, route, go, dayText, agoText, qrSvg, loadQr, today, lines, held, sampleLink, onRoute } from './kit/ui.js';
 import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } from './kit/ledger.js';
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
@@ -213,7 +213,14 @@ function uniqueBuildId(name) {
 }
 
 // ---------------------------------------------------------------- label
+// The QR library comes the first time a label opens: until then a line says so, and the label is drawn again when it has.
+let qrAsked = false, qrFailed = false;
 function renderLabel(t) {
+  if (!window.qrcode) {
+    if (!qrAsked) { qrAsked = true; loadQr().then(render, () => { qrFailed = true; render(); }); }
+    return [h('div', { class: 'no-print' }, h('p', { class: 'crumb' }, h('a', { href: '#' + t.id }, '‹ Tote ' + t.id)),
+      h('p', { class: 'empty', role: 'status' }, qrFailed ? 'The QR code didn\'t load. Reload the page to try again.' : 'Making the QR code…'))];
+  }
   return [
     h('div', { class: 'no-print' }, h('p', { class: 'crumb' }, h('a', { href: '#' + t.id }, '‹ Tote ' + t.id)),
       h('p', { class: 'muted' }, 'Print it, trim it and tape it to the end of the tote, with the NFC sticker under the tape.'),

@@ -67,3 +67,11 @@ test('an import only fills in: contents, notes and a card typed at the tote stay
   assert.throws(() => mergeImport([{ id: '01' }], () => null, () => false), /not a Mothball import/);
   assert.throws(() => mergeImport({ totes: { id: '01' } }, () => null, () => false), /not a Mothball import/);
 });
+
+test('the QR library is not on the page: only the screen that draws codes loads it, and it stays in the offline copy', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /qrcode\.js/, 'index.html loads js/kit/qrcode.js on every page, a tenant\'s first tap too');
+  const sw = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+  assert.match(sw.match(/SHELL = \[([^\]]*)\]/)[1], /'js\/kit\/qrcode\.js'/, 'printing offline needs qrcode.js in the offline copy');
+});
