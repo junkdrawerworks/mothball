@@ -468,6 +468,18 @@ async function moveChecks({ ctx, base, assert }) {
     await p.click('dialog[open] button[type=submit]');
     await p.waitForSelector(".toast.show >> text=That isn't in tote 01 any more.");
     assert.deepEqual(await p.evaluate(() => window.__mothball.ledger.doc('totes', '02').items), ['Window candles', 'Timer plug']);
+    // two lines the same, the second ticked: moving the first leaves the tick on the one still here, and on nothing else
+    await p.evaluate(() => { const { ledger, render } = window.__mothball; ledger.put('totes', { ...ledger.doc('totes', '01'), items: ['Extension cord', 'Extension cord', 'Window lights'] }); render(); });
+    await p.waitForFunction(() => document.querySelectorAll('.checks li').length === 3);
+    await p.locator('.checks li').nth(1).locator('input').check();
+    await p.locator('.checks li').nth(0).locator('.move').click();
+    await p.waitForSelector('dialog[open] h2 >> text=Move Extension cord');
+    await p.selectOption('dialog[open] #f-to', '02');
+    await p.click('dialog[open] button[type=submit]');
+    await p.waitForSelector('.toast.show >> text=Extension cord moved to tote 02.');
+    assert.deepEqual(await p.locator('.checks li').evaluateAll(ls => ls.map(l => [l.querySelector('.t').textContent, l.querySelector('input').checked])),
+      [['Extension cord', true], ['Window lights', false]], 'the tick left the extension cord still in the tote');
+    assert.equal(await p.locator('.small', { hasText: 'found' }).textContent(), '1 of 2 found');
     // one tote: nowhere to move to
     await p.evaluate(() => { const { ledger, render } = window.__mothball; ledger.del('totes', '02'); render(); });
     await p.waitForFunction(() => !document.querySelector('.checks .move'));

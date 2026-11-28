@@ -57,11 +57,23 @@ export function findIn(q, totes, cards) {
 // when it isn't in `from` any more (moved or deleted on another device while the sheet was open). The line is the one
 // at index i if it still reads the same, else the first that does, and goes at the end of `to`'s contents; a card `to`
 // already has isn't listed in it twice.
+const lineAt = (items, i, text) => items[i] === text ? i : items.indexOf(text);
 export function lineMoved(from, to, i, text) {
-  const items = [...(from.items || [])], at = items[i] === text ? i : items.indexOf(text);
+  const items = [...(from.items || [])], at = lineAt(items, i, text);
   if (at < 0 || from.id === to.id) return null;
   items.splice(at, 1);
   return [{ ...from, items }, { ...to, items: [...(to.items || []), text] }];
+}
+// The ticks after a line leaves tote `id` (items: its contents before, i and text as lineMoved takes them). Two lines
+// the same are told apart by place (tickKeys: 'Cord', 'Cord#2'), so each tick left in the tote moves to its line's new
+// key, and the line that went takes its tick with it. checked: the ticked keys, changed in place.
+export function ticksMoved(checked, id, items, i, text) {
+  const at = lineAt(items, i, text);
+  if (at < 0) return;
+  const before = tickKeys(id, items), kept = before.map(k => checked.has(k));
+  before.forEach(k => checked.delete(k));
+  kept.splice(at, 1);
+  tickKeys(id, items.filter((_, j) => j !== at)).forEach((k, j) => kept[j] && checked.add(k));
 }
 export function cardMoved(from, to, card) {
   const had = to.builds || [];

@@ -4,7 +4,7 @@ import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } 
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
-import { isOut, comingDown, tickKeys, findIn, lineMoved, cardMoved, mergeImport } from './totes.js';
+import { isOut, comingDown, tickKeys, ticksMoved, findIn, lineMoved, cardMoved, mergeImport } from './totes.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 watchConnectLinks('mothball', toast);
@@ -195,9 +195,10 @@ async function moveTo(title, fromId, plan) {
   return saved;
 }
 async function moveLine(t, i, text) {
-  const saved = await moveTo(`Move ${text}`, t.id, (from, to) => lineMoved(from, to, i, text));
+  let was = [];   // the tote's contents as the move found them
+  const saved = await moveTo(`Move ${text}`, t.id, (from, to) => { was = from.items || []; return lineMoved(from, to, i, text); });
   if (!saved) return;
-  checked.delete(tickKeys(t.id, t.items || [])[i]);
+  ticksMoved(checked, t.id, was, i, text);
   toast(`${text} moved to tote ${saved[1].id}.`); render();
 }
 async function moveCard(fromId, b) {

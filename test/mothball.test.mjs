@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { monthsUntil, seasonName } from '../js/sample.js';
-import { isOut, comingDown, toteNames, tickKeys, findIn, lineMoved, cardMoved, checkImport, mergeImport } from '../js/totes.js';
+import { isOut, comingDown, toteNames, tickKeys, ticksMoved, findIn, lineMoved, cardMoved, checkImport, mergeImport } from '../js/totes.js';
 
 test('months until a season comes round', () => {
   const nov = new Date(2026, 10, 26);
@@ -38,6 +38,15 @@ test('the season notice lists only the totes still put away, in words that fit h
 test('a tick stays on its thing when the list changes', () => {
   assert.deepEqual(tickKeys('04', ['Lights', 'Spare fuses', 'Lights']), ['04:Lights', '04:Spare fuses', '04:Lights#2']);
   assert.equal(tickKeys('04', ['Spare fuses', 'Timer'])[0], tickKeys('04', ['Lights', 'Spare fuses'])[1], 'line 1 taken out');
+});
+test('a line moved to another tote: the ticks left behind stay on their things, two lines the same too', () => {
+  const ticks = (items, ticked, i, text) => { const c = new Set(ticked); ticksMoved(c, '01', items, i, text); return [...c].sort(); };
+  assert.deepEqual(ticks(['Cord', 'Cord', 'Lamp'], ['01:Cord#2'], 0, 'Cord'), ['01:Cord'], 'the other Cord lost its tick');
+  assert.deepEqual(ticks(['Cord', 'Cord', 'Lamp'], ['01:Cord'], 0, 'Cord'), [], 'the line moved kept its tick here');
+  assert.deepEqual(ticks(['Cord', 'Cord', 'Lamp'], ['01:Cord', '01:Lamp'], 1, 'Cord'), ['01:Cord', '01:Lamp']);
+  assert.deepEqual(ticks(['Lamp', 'Cord', 'Cord'], ['01:Cord#2'], 4, 'Cord'), ['01:Cord'], 'the list changed meanwhile: the first that reads the same');
+  assert.deepEqual(ticks(['Lamp', 'Fan'], ['01:Fan', '02:Lamp'], 0, 'Lamp'), ['01:Fan', '02:Lamp'], 'another tote\'s ticks');
+  assert.deepEqual(ticks(['Lamp', 'Fan'], ['01:Fan'], 1, 'Gone'), ['01:Fan'], 'nothing moved');
 });
 test('a line or a card moved to another tote: both totes, together, and nothing listed twice', () => {
   const a = { id: '01', name: 'Porch lights', items: ['Light strings (4)', 'Timer plug', 'Clips', 'Timer plug'], builds: ['sleigh', 'train'] };
