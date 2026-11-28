@@ -44,7 +44,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await page.click('text=‹ All totes');
   await page.waitForSelector('.row .num');
   assert.equal(await page.locator('.row', { hasText: '02' }).locator('.meta .chip').textContent(), 'out');
-  assert.match(await page.locator('.row', { hasText: '02' }).locator('.s').textContent(), /^Basement, rack by the door, middle · out since [A-Z][a-z]{2} \d{1,2}$/);
+  assert.match(await page.locator('.row', { hasText: '02' }).locator('.s').textContent(), /^Basement, rack by the door, middle · out since [A-Z][a-z]{2}\u00a0\d{1,2}$/);
   // tote 01: the note to next year is in Edit, and Done clears it
   await page.click('text=Pumpkins and the porch web');
   await page.click('#app button:text-is("Edit")');
@@ -223,8 +223,8 @@ async function homeLineChecks({ page, base, assert }) {
     const t = r.querySelector('.t'); return { h: t.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(t).lineHeight), s: r.querySelector('.s').textContent, meta: !!r.querySelector('.meta') };
   });
   assert.ok(line.h < line.lh * 1.5, `"Tote of beach gear 15" runs to ${Math.round(line.h / line.lh)} lines at 390 px`);
-  assert.deepEqual([line.s, line.meta], ['Attic, by the hatch · packed 5 wk ago', false]);
-  assert.match(await page.locator('.row', { hasText: 'Inflatable snowman' }).locator('.s').textContent(), /^Garage, top shelf, left · packed (9|10) mo ago$/);
+  assert.deepEqual([line.s, line.meta], ['Attic, by the hatch · packed 5\u00a0wk\u00a0ago', false], 'the age wraps apart');
+  assert.match(await page.locator('.row', { hasText: 'Inflatable snowman' }).locator('.s').textContent(), /^Garage, top shelf, left · packed (9|10)\u00a0mo\u00a0ago$/);
 }
 
 // A tick draws the tote's page again: a build card opened to read its steps stays open, and one closed stays closed.

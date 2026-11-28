@@ -32,8 +32,10 @@ const fresh = then => e => held(e.currentTarget, ledger.catchUp(COLLS)).then(the
 // How long since, in a tote's line under its name ('Attic, by the hatch · packed 5 wk ago', '· out since Nov 2'), so the
 // name has the row's width (beside a column of 'packed 10 mo ago' most names ran to two lines). The row keeps an 'out'
 // chip for a tote that's out.
+// (a number never wraps away from its unit or month: 'packed 4' over 'wk ago' read as four of something)
 const shortDay = day => { const s = dayText(day), y = `, ${new Date().getFullYear()}`; return s.endsWith(y) ? s.slice(0, -y.length) : s; };
-const since = t => isOut(t) ? (t.unpacked ? 'out since ' + shortDay(t.unpacked) : '') : t.packed ? 'packed ' + agoText(t.packed) : '';
+const keep = s => s.replace(/ /g, '\u00a0');
+const since = t => isOut(t) ? (t.unpacked ? 'out since ' + keep(shortDay(t.unpacked)) : '') : t.packed ? 'packed ' + keep(agoText(t.packed)) : '';
 function renderHome() {
   const list = totes();
   const order = SEASONS.map(s => s[0]).sort((a, b) => monthsUntil(a) - monthsUntil(b));
