@@ -32,6 +32,7 @@ GitHub Pages serves it from `main`, `/ (root)`, at its own address (`CNAME`).
 ### Files
 
 - `js/app.js`: the app.
+- `js/totes.js`: a tote's state (out or put away), which lines are ticked, the home page's notice and the import, unit-tested.
 - `js/sample.js`: the seasons and the sample totes.
 - `js/kit/`, `css/kit.css`: the tag apps' shared kit (ledger client, Web NFC, small UI helpers).
 - `fonts/`: Barlow, Barlow Condensed and JetBrains Mono (SIL Open Font License), served from here so nothing loads from elsewhere.
