@@ -156,6 +156,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   assert.equal(await page.locator('.row >> text=Tree skirt').count(), 0);
 
   await homeLineChecks({ page, base, assert });
+  await pickChecks({ page, base, assert });
   await cardChecks({ page, base, assert });
   await sharedChecks({ page, base, assert });
   await refusedChecks({ page, base, assert });
@@ -170,6 +171,26 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await (await import('./kit-checks.mjs')).targetsAudit({ browser: ctx.browser(), base, assert, hashes: ['', '#01', '#02', '#/builds', '#/build/pumpkins', '#/label/01', '#09'] });
   await backKeepsPlace({ browser: ctx.browser(), base, assert, app: 'mothball', colls: { builds: [],
     totes: Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1).padStart(2, '0'), name: `Tote of things ${i + 1}`, season: 'christmas', place: 'Garage', items: [], builds: [] })) } });
+}
+
+// Edit tote: the build cards are a checklist of every card (name and season), the tote's ticked; two ticked and Save
+// puts both under Builds inside.
+async function pickChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo#02');
+  await page.waitForSelector('.tape >> text=Porch train');
+  await page.click('#app button:text-is("Edit")');
+  const picks = () => page.locator('dialog[open] .pick').evaluateAll(ls => ls.map(l => [l.querySelector('span').textContent, l.querySelector('small').textContent, l.querySelector('input').checked]));
+  assert.deepEqual(await picks(), [['Light-up pumpkins', 'Halloween', false], ['Porch spider web', 'Halloween', false], ['Porch train', 'Christmas', true]]);
+  assert.ok((await page.locator('dialog[open] .pick').first().boundingBox()).height >= 44, 'a card to tick is smaller than a thumb');
+  assert.equal(await page.locator('dialog[open] input[name=builds]').count(), 0, 'the build card ids are still typed');
+  await page.click('dialog[open] .pick >> text=Porch train');
+  await page.click('dialog[open] .pick >> text=Light-up pumpkins');
+  await page.click('dialog[open] .pick >> text=Porch spider web');
+  await page.click('dialog[open] button[type=submit]');
+  await page.waitForSelector('h2 >> text=Builds inside');
+  assert.deepEqual(await page.locator('details.build summary b').allTextContents(), ['Light-up pumpkins', 'Porch spider web']);
+  assert.deepEqual(await page.evaluate(() => window.__mothball.ledger.doc('totes', '02').builds), ['pumpkins', 'porch-web']);
 }
 
 // The home page at 390 px: a tote's name has the row's width, its age in the line under it, so names like these stay
@@ -408,6 +429,7 @@ async function secondDevice({ ctx, base, assert }) {
     assert.equal(await p.locator('.empty').count(), 0);
     await p.click('text=New tote');
     assert.equal(await p.inputValue('#f-id'), '02', 'New tote offered a number the sheet already has');
+    assert.equal(await p.locator('dialog[open] .picks').textContent(), 'Build cards inside: Make cards under Build cards.');
     await p.fill('#f-name', 'Wreaths');
     await p.fill('#f-items', 'Front door wreath');
     await p.click('dialog >> button[type=submit]');

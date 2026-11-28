@@ -148,11 +148,21 @@ async function noteDone(t) {
 
 async function editTote(t) {
   const exists = !!(t?._updated && tote(t.id));   // a sticker page's stub has no saved time: always a new tote
-  // the tote as typed: its number made safe for a sticker, the contents and cards as lists
+  // The build cards inside: every card to tick (its name and season), the tote's ticked; saved as the same list of ids,
+  // in the order they were, new ones after. An id with no card here (a card since deleted) stays as it was.
+  const cards = builds(), had = t?.builds || [];
+  const picks = cards.length ? h('fieldset', { class: 'picks' }, h('legend', {}, 'Build cards inside'),
+    cards.map(b => h('label', { class: 'pick' }, h('input', { type: 'checkbox', name: 'card', value: b.id, checked: had.includes(b.id) }),
+      h('span', {}, b.name), h('small', {}, seasonName(b.season)))))
+    : h('p', { class: 'picks none' }, h('b', {}, 'Build cards inside: '), 'Make cards under Build cards.');
+  const picked = () => {
+    const on = [...picks.querySelectorAll('input:checked')].map(i => i.value);
+    return [...had.filter(id => on.includes(id) || !build(id)), ...on.filter(id => !had.includes(id))];
+  };
+  // the tote as typed: its number made safe for a sticker, the contents as a list
   const made = v => {
     const id = (v.id || nextNumber()).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12) || nextNumber();
-    return { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note,
-      items: lines(v.items), builds: v.builds.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
+    return { ...(t || {}), id, name: v.name, season: v.season, place: v.place, box: v.box, note: v.note, items: lines(v.items), builds: picked() };
   };
   // a Save that can't go keeps the sheet open with everything typed: a number another tote has, or not heard from the ledger yet
   const check = v => {
@@ -161,14 +171,13 @@ async function editTote(t) {
     if ((!exists || t.id !== id) && tote(id)) return { field: 'id', line: `There's already a tote ${id}.` };
     return refusedLine(doc);
   };
-  const v = await sheet({ title: t?.id ? `Tote ${t.id}` : 'New tote', danger: exists ? 'Delete' : null, check, fields: [
+  const v = await sheet({ title: t?.id ? `Tote ${t.id}` : 'New tote', danger: exists ? 'Delete' : null, check, body: picks, fields: [
     { name: 'id', label: 'Number', value: t?.id || nextNumber(), inputmode: 'numeric', hint: exists ? 'The number on its sticker. Changing it needs a new sticker.' : 'Write it big on the tote too.' },
     { name: 'name', label: 'What it is', value: t?.name, required: true, placeholder: 'Christmas lights and the porch train' },
     { name: 'season', label: 'Season', type: 'select', value: t?.season || 'christmas', options: SEASONS.map(s => [s[0], s[1]]) },
     { name: 'place', label: 'Where it lives', value: t?.place, placeholder: 'Garage, top shelf, left' },
     { name: 'items', label: 'Contents (one per line)', type: 'textarea', rows: 6, value: (t?.items || []).join('\n') },
     { name: 'note', label: 'Note to next year', type: 'textarea', rows: 3, value: t?.note, placeholder: 'What broke, what you ran out of, what to buy before it comes out again.' },
-    { name: 'builds', label: 'Build cards inside (comma-separated ids)', value: (t?.builds || []).join(', '), hint: builds().length ? 'Cards: ' + builds().map(b => b.id).join(', ') : 'Make cards under Build cards.' },
     { name: 'box', label: 'Moving box number', value: t?.box, hint: 'From Manifest, while it travels.' },
   ] });
   if (!v) return;

@@ -23,3 +23,11 @@ ol.steps { padding-left: 22px; margin: 0 0 10px; } ol.steps li { margin: 0 0 6px
 .btns.pack { margin: 4px 0 14px; }
 .note .done { margin: -6px -4px -10px 0; text-align: right; }
 .note .done .linkish { color: inherit; font-weight: 600; min-height: 44px; min-width: 44px; padding: 0 4px; }
+/* Edit tote's build cards: a checklist, each a row a thumb can't miss */
+.picks { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
+.picks legend { font-weight: 600; font-size: 15px; padding: 0; margin: 0 0 2px; }
+.pick { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.pick input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; margin: 0; }
+.pick span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pick small { color: var(--ink2); font-size: 14px; }
+.picks.none { font-size: 15px; color: var(--ink2); }
