@@ -163,6 +163,8 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await oneDigitChecks({ page, base, assert });
   await cardChecks({ page, base, assert });
   await sharedChecks({ page, base, assert });
+  await searchChecks({ page, base, assert });
+  await moveChecks({ ctx, base, assert });
   await refusedChecks({ page, base, assert });
   await heldChecks({ ctx, base, assert });
   await ledgerChecks({ page, ctx, base, assert, problems });
@@ -356,6 +358,122 @@ async function sharedChecks({ page, base, assert }) {
   await page.evaluate(() => { location.hash = '#/label/08'; });
   await page.waitForSelector('.label-body >> text=Garlands');
   assert.deepEqual(await page.locator('.label-body li').allTextContents(), ['Porch train (build)', 'Garland 1', 'Garland 2', 'Garland 3', 'Garland 4', 'and 2 more']);
+}
+
+// Do I have…: what's typed is looked for in every tote's name, contents lines and build cards, each found under its
+// tote's number; a card in no tote opens the card; a phone's curly apostrophe finds a straight one; nothing found says
+// so; Back from a tote comes back to the same answers, and an emptied box shows the totes by season again.
+async function searchChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo');
+  await page.waitForSelector('.row .num');
+  await page.evaluate(() => { const { ledger, render } = window.__mothball;
+    ledger.put('totes', { id: '03', name: 'Wreaths', season: 'christmas', place: 'Attic, left', items: ['Grandma’s wreath', 'Spare fuses (pack of 10)'], builds: [], unpacked: '2026-11-20', out: true });
+    ledger.put('builds', { id: 'relay-board', name: 'Spare relay board', season: 'other' });
+    render(); });
+  const rows = () => page.locator('.found .row').evaluateAll(rs => rs.map(r => [r.querySelector('.num')?.textContent || '', r.querySelector('.t').textContent, r.querySelector('.s').textContent, r.querySelector('.chip')?.textContent || '', r.getAttribute('href')]));
+  const search = page.locator('input.search');
+  assert.equal(await search.getAttribute('placeholder'), 'Do I have…');
+  await search.fill('porch');
+  // (a tote found by its name has its home page line: where it lives, and how long since it was packed)
+  const packed = (await rows()).map(r => r[2].replace(/ · packed .*$/, ' · packed …'));
+  assert.deepEqual((await rows()).map((r, i) => [r[0], r[1], packed[i], r[3], r[4]]), [
+    ['01', 'Pumpkins and the porch web', 'Basement, rack by the door, top · packed …', '', '#01'],
+    ['01', 'Porch spider web and four stakes', 'Pumpkins and the porch web · Basement, rack by the door, top', '', '#01'],
+    ['01', 'Porch spider web (build)', 'Pumpkins and the porch web · Basement, rack by the door, top', '', '#01'],
+    ['02', 'Porch train', 'Basement, rack by the door, middle · packed …', '', '#02'],
+    ['02', 'Porch train (build)', 'Porch train · Basement, rack by the door, middle', '', '#02']]);
+  assert.equal(await page.locator('.seasons').isHidden(), true, 'the totes by season stay up under the answers');
+  await search.fill('Fuses ');
+  assert.deepEqual(await rows(), [['03', 'Spare fuses (pack of 10)', 'Wreaths · Attic, left', 'out', '#03']], 'a tote that\'s out says so');
+  await search.fill("grandma's");
+  assert.deepEqual((await rows()).map(r => r[1]), ['Grandma’s wreath'], "a straight apostrophe finds a phone's curly one");
+  await search.fill('usb supply');
+  assert.deepEqual((await rows()).map(r => r.slice(0, 3)), [['02', 'USB-C supply', 'Porch train · Basement, rack by the door, middle']]);
+  await search.fill('relay');
+  assert.deepEqual(await rows(), [['', 'Spare relay board (build)', 'Build card, in no tote', '', '#/build/relay-board']]);
+  await search.fill('saffron');
+  assert.equal(await page.locator('.found .empty').textContent(), 'No "saffron" in any tote.');
+  assert.equal(await page.locator('.found .row').count(), 0);
+  // a tote opened from the answers, and Back: the same answers
+  await search.fill('snowflakes');
+  await page.click('.found .row >> text=Window snowflakes (pack of 12)');
+  await page.waitForSelector('.tape >> text=Porch train');
+  await page.goBack();
+  await page.waitForSelector('.found .row');
+  assert.equal(await page.inputValue('input.search'), 'snowflakes');
+  assert.deepEqual((await rows()).map(r => r[1]), ['Window snowflakes (pack of 12)']);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the answers run off the side at 390 px');
+  await search.fill('');
+  assert.equal(await page.locator('.seasons').isVisible(), true);
+  assert.equal(await page.locator('.found').isHidden(), true);
+  assert.equal(await page.locator('.seasons .row .num').count(), 3);
+}
+
+// Repacking, connected to a pretend ledger: Move on a contents line and on a build card picks another tote, and both
+// totes go to the sheet in one batch; Move never ticks its line, a tick on another line stays, a line deleted on another
+// device while the picker was open moves nowhere, and with one tote there's no Move.
+async function moveChecks({ ctx, base, assert }) {
+  const { DemoLedger } = await import(new URL('../js/kit/ledger.js', import.meta.url));
+  const google = new DemoLedger({ 'mothball.builds': [{ id: 'sleigh', name: 'Light-up sleigh', season: 'christmas' }], 'mothball.totes': [
+    { id: '01', name: 'Porch lights', season: 'christmas', place: 'Garage', items: ['Light strings (4)', 'Timer plug', 'Clips (bag)'], builds: ['sleigh'] },
+    { id: '02', name: 'Christmas: windows', season: 'christmas', place: 'Attic', items: ['Window candles'], builds: [] }] });
+  const phone = await ctx.browser().newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  const batches = [], errors = [];
+  phone.on('page', p => p.on('pageerror', e => errors.push(e.message)));
+  try {
+    await phone.route('https://script.google.com/**', route => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      if (body.op === 'batch') batches.push(body.ops.map(o => `${o.op} ${o.coll} ${o.id}`).sort());
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(google.handle(body)) });
+    });
+    await phone.addInitScript(() => { try { localStorage.getItem('mothball.ledger') || localStorage.setItem('mothball.ledger',
+      JSON.stringify({ url: 'https://script.google.com/macros/s/AKfyTEST/exec', key: 'k'.repeat(40) })); } catch {} });
+    const p = await phone.newPage();
+    const line = text => p.locator('.checks li', { hasText: text });
+    const stored = id => { const { _updated, ...d } = google.store['mothball.totes'][id]; return [d.items, d.builds]; };
+    await p.goto(base + '#01');
+    await p.waitForSelector('.tape >> text=Porch lights');
+    assert.equal(await p.locator('.checks .move').count(), 3, 'a Move on each line');
+    await line('Light strings').locator('input').check();
+    await line('Timer plug').locator('.move').click();
+    await p.waitForSelector('dialog[open] h2 >> text=Move Timer plug');
+    assert.equal(await line('Timer plug').locator('input').isChecked(), false, 'Move ticked its line');
+    assert.deepEqual(await p.locator('dialog[open] #f-to option').allTextContents(), ['Pick a tote', '02 Christmas: windows']);
+    await p.click('dialog[open] button[type=submit]');
+    await p.waitForSelector('dialog[open] .sheet-msg >> text=Pick the tote it goes in.');
+    await p.selectOption('dialog[open] #f-to', '02');
+    await p.click('dialog[open] button[type=submit]');
+    await p.waitForSelector('.toast.show >> text=Timer plug moved to tote 02.');
+    assert.deepEqual(await p.locator('.checks .t').allTextContents(), ['Light strings (4)', 'Clips (bag)']);
+    assert.equal(await p.locator('.small', { hasText: 'found' }).textContent(), '1 of 2 found', 'the tick on Light strings went');
+    await p.waitForFunction(() => window.__mothball.ledger.pending === 0);
+    assert.deepEqual([stored('01'), stored('02')], [[['Light strings (4)', 'Clips (bag)'], ['sleigh']], [['Window candles', 'Timer plug'], []]]);
+    assert.deepEqual(batches, [['put totes 01', 'put totes 02']], 'the two totes went in one batch');
+    // the build card (the only one in the tote, so open)
+    await p.click('details.build >> button:text-is("Move")');
+    await p.waitForSelector('dialog[open] h2 >> text=Move Light-up sleigh');
+    await p.selectOption('dialog[open] #f-to', '02');
+    await p.click('dialog[open] button[type=submit]');
+    await p.waitForSelector('.toast.show >> text=Light-up sleigh moved to tote 02.');
+    assert.equal(await p.locator('details.build').count(), 0);
+    await p.waitForFunction(() => window.__mothball.ledger.pending === 0);
+    assert.deepEqual([stored('01')[1], stored('02')[1]], [[], ['sleigh']]);
+    assert.deepEqual(batches.at(-1), ['put totes 01', 'put totes 02']);
+    // the line goes on another device while the picker is open: nothing moves
+    await line('Clips (bag)').locator('.move').click();
+    await p.waitForSelector('dialog[open] h2 >> text=Move Clips (bag)');
+    await p.evaluate(() => { const { ledger } = window.__mothball; ledger.put('totes', { ...ledger.doc('totes', '01'), items: ['Light strings (4)'] }); });
+    await p.selectOption('dialog[open] #f-to', '02');
+    await p.click('dialog[open] button[type=submit]');
+    await p.waitForSelector(".toast.show >> text=That isn't in tote 01 any more.");
+    assert.deepEqual(await p.evaluate(() => window.__mothball.ledger.doc('totes', '02').items), ['Window candles', 'Timer plug']);
+    // one tote: nowhere to move to
+    await p.evaluate(() => { const { ledger, render } = window.__mothball; ledger.del('totes', '02'); render(); });
+    await p.waitForFunction(() => !document.querySelector('.checks .move'));
+    assert.equal(await p.locator('#app button:text-is("Move")').count(), 0);
+    assert.deepEqual(errors, [], 'errors on the phone');
+  } finally { await phone.close(); }
 }
 
 // A Save the app refuses (a number another tote has) keeps the sheet open with everything typed, says why above the

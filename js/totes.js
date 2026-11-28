@@ -2,6 +2,7 @@
 import { SEASONS, seasonName, monthsUntil } from './sample.js';
 import { lines } from './kit/ui.js';
 import { fillIn, refusal } from './kit/ledger.js';
+import { found } from './kit/find.js';
 
 // Out of storage? Each press saves it (out: true for "I unpacked it", false for "I packed it"), so the last press wins,
 // even on the same day; a tote saved before that goes by its two dates.
@@ -32,6 +33,40 @@ export function comingDown(totes, now = new Date()) {
 export function tickKeys(id, items) {
   const seen = {};
   return items.map(it => { const n = (seen[it] = (seen[it] || 0) + 1); return `${id}:${it}${n > 1 ? '#' + n : ''}`; });
+}
+
+// Do I have…: what has every word typed (the kit's search, as Larder's), one row each, by tote number: a tote by its
+// name, a contents line, a build card in it by its card's name ({ tote, what: 'tote' | 'line' | 'card', text, card });
+// then a card in no tote ({ tote: null, what: 'card', ... }). cards: every card, to look each tote's ids up.
+export function findIn(q, totes, cards) {
+  const byId = new Map(cards.map(b => [b.id, b])), packed = new Set(), out = [];
+  for (const t of totes) {
+    if (found(q, t.name)) out.push({ tote: t, what: 'tote', text: t.name });
+    for (const line of t.items || []) if (found(q, line)) out.push({ tote: t, what: 'line', text: line });
+    for (const id of t.builds || []) {
+      const b = byId.get(id);
+      if (b) packed.add(id);
+      if (b && found(q, b.name)) out.push({ tote: t, what: 'card', text: b.name, card: b });
+    }
+  }
+  for (const b of cards) if (!packed.has(b.id) && found(q, b.name)) out.push({ tote: null, what: 'card', text: b.name, card: b });
+  return out;
+}
+
+// Moving a contents line or a build card to another tote: both totes as they're saved, together, [from, to], or null
+// when it isn't in `from` any more (moved or deleted on another device while the sheet was open). The line is the one
+// at index i if it still reads the same, else the first that does, and goes at the end of `to`'s contents; a card `to`
+// already has isn't listed in it twice.
+export function lineMoved(from, to, i, text) {
+  const items = [...(from.items || [])], at = items[i] === text ? i : items.indexOf(text);
+  if (at < 0 || from.id === to.id) return null;
+  items.splice(at, 1);
+  return [{ ...from, items }, { ...to, items: [...(to.items || []), text] }];
+}
+export function cardMoved(from, to, card) {
+  const had = to.builds || [];
+  if (!(from.builds || []).includes(card) || from.id === to.id) return null;
+  return [{ ...from, builds: from.builds.filter(b => b !== card) }, { ...to, builds: had.includes(card) ? had : [...had, card] }];
 }
 
 // ---- import
