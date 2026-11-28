@@ -161,6 +161,7 @@ export async function appChecks({ page, ctx, base, assert, problems }) {
   await oneDigitChecks({ page, base, assert });
   await cardChecks({ page, base, assert });
   await sharedChecks({ page, base, assert });
+  await searchChecks({ page, base, assert });
   await refusedChecks({ page, base, assert });
   await heldChecks({ ctx, base, assert });
   await ledgerChecks({ page, ctx, base, assert, problems });
@@ -310,6 +311,56 @@ async function sharedChecks({ page, base, assert }) {
   await page.evaluate(() => { location.hash = '#/label/08'; });
   await page.waitForSelector('.label-body >> text=Garlands');
   assert.deepEqual(await page.locator('.label-body li').allTextContents(), ['Porch train (build)', 'Garland 1', 'Garland 2', 'Garland 3', 'Garland 4', 'and 2 more']);
+}
+
+// Do I have…: what's typed is looked for in every tote's name, contents lines and build cards, each found under its
+// tote's number; a card in no tote opens the card; a phone's curly apostrophe finds a straight one; nothing found says
+// so; Back from a tote comes back to the same answers, and an emptied box shows the totes by season again.
+async function searchChecks({ page, base, assert }) {
+  await page.goto('about:blank');
+  await page.goto(base + '?demo');
+  await page.waitForSelector('.row .num');
+  await page.evaluate(() => { const { ledger, render } = window.__mothball;
+    ledger.put('totes', { id: '03', name: 'Wreaths', season: 'christmas', place: 'Attic, left', items: ['Grandma’s wreath', 'Spare fuses (pack of 10)'], builds: [], unpacked: '2026-11-20', out: true });
+    ledger.put('builds', { id: 'relay-board', name: 'Spare relay board', season: 'other' });
+    render(); });
+  const rows = () => page.locator('.found .row').evaluateAll(rs => rs.map(r => [r.querySelector('.num')?.textContent || '', r.querySelector('.t').textContent, r.querySelector('.s').textContent, r.querySelector('.chip')?.textContent || '', r.getAttribute('href')]));
+  const search = page.locator('input.search');
+  assert.equal(await search.getAttribute('placeholder'), 'Do I have…');
+  await search.fill('porch');
+  // (a tote found by its name has its home page line: where it lives, and how long since it was packed)
+  const packed = (await rows()).map(r => r[2].replace(/ · packed .*$/, ' · packed …'));
+  assert.deepEqual((await rows()).map((r, i) => [r[0], r[1], packed[i], r[3], r[4]]), [
+    ['01', 'Pumpkins and the porch web', 'Basement, rack by the door, top · packed …', '', '#01'],
+    ['01', 'Porch spider web and four stakes', 'Pumpkins and the porch web · Basement, rack by the door, top', '', '#01'],
+    ['01', 'Porch spider web (build)', 'Pumpkins and the porch web · Basement, rack by the door, top', '', '#01'],
+    ['02', 'Porch train', 'Basement, rack by the door, middle · packed …', '', '#02'],
+    ['02', 'Porch train (build)', 'Porch train · Basement, rack by the door, middle', '', '#02']]);
+  assert.equal(await page.locator('.seasons').isHidden(), true, 'the totes by season stay up under the answers');
+  await search.fill('Fuses ');
+  assert.deepEqual(await rows(), [['03', 'Spare fuses (pack of 10)', 'Wreaths · Attic, left', 'out', '#03']], 'a tote that\'s out says so');
+  await search.fill("grandma's");
+  assert.deepEqual((await rows()).map(r => r[1]), ['Grandma’s wreath'], "a straight apostrophe finds a phone's curly one");
+  await search.fill('usb supply');
+  assert.deepEqual((await rows()).map(r => r.slice(0, 3)), [['02', 'USB-C supply', 'Porch train · Basement, rack by the door, middle']]);
+  await search.fill('relay');
+  assert.deepEqual(await rows(), [['', 'Spare relay board (build)', 'Build card, in no tote', '', '#/build/relay-board']]);
+  await search.fill('saffron');
+  assert.equal(await page.locator('.found .empty').textContent(), 'No "saffron" in any tote.');
+  assert.equal(await page.locator('.found .row').count(), 0);
+  // a tote opened from the answers, and Back: the same answers
+  await search.fill('snowflakes');
+  await page.click('.found .row >> text=Window snowflakes (pack of 12)');
+  await page.waitForSelector('.tape >> text=Porch train');
+  await page.goBack();
+  await page.waitForSelector('.found .row');
+  assert.equal(await page.inputValue('input.search'), 'snowflakes');
+  assert.deepEqual((await rows()).map(r => r[1]), ['Window snowflakes (pack of 12)']);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the answers run off the side at 390 px');
+  await search.fill('');
+  assert.equal(await page.locator('.seasons').isVisible(), true);
+  assert.equal(await page.locator('.found').isHidden(), true);
+  assert.equal(await page.locator('.seasons .row .num').count(), 3);
 }
 
 // A Save the app refuses (a number another tote has) keeps the sheet open with everything typed, says why above the

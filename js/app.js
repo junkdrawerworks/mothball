@@ -4,7 +4,7 @@ import { Ledger, watchConnectLinks, importSummary, refusedLine, STILL_LOADING } 
 import { tagUrl } from './kit/tags.js';
 import { nfcPanel } from './kit/panel.js';
 import { SEASONS, seasonName, monthsUntil, SAMPLE } from './sample.js';
-import { isOut, comingDown, tickKeys, mergeImport } from './totes.js';
+import { isOut, comingDown, tickKeys, findIn, mergeImport } from './totes.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 watchConnectLinks('mothball', toast);
@@ -36,20 +36,38 @@ const fresh = then => e => held(e.currentTarget, ledger.catchUp(COLLS)).then(the
 const shortDay = day => { const s = dayText(day), y = `, ${new Date().getFullYear()}`; return s.endsWith(y) ? s.slice(0, -y.length) : s; };
 const keep = s => s.replace(/ /g, '\u00a0');
 const since = t => isOut(t) ? (t.unpacked ? 'out since ' + keep(shortDay(t.unpacked)) : '') : t.packed ? 'packed ' + keep(agoText(t.packed)) : '';
+// A tote's row: its number, then a line and what's under it, and 'out' beside a tote that's out.
+const toteRow = (t, line, sub) => h('li', {}, h('a', { class: 'row', href: '#' + t.id },
+  h('span', { class: 'num' }, t.id),
+  h('span', { class: 'main' }, h('span', { class: 't' }, line), h('span', { class: 's' }, sub)),
+  isOut(t) ? h('span', { class: 'meta' }, h('span', { class: 'chip' }, 'out')) : null));
+const homeLine = t => [t.place || 'No shelf yet', since(t)].filter(Boolean).join(' · ');
+// Do I have…: while something is typed, the home page is what it finds in every tote's name, contents and build cards
+// (totes.js findIn), each under its tote's number ('03 Spare fuses', the tote's name and shelf under it); emptied, the
+// totes by season again. It stays typed while the app is open, so Back from a tote comes back to the same answers.
+let query = '';
+const foundRow = x => !x.tote
+  ? h('li', {}, h('a', { class: 'row', href: '#/build/' + x.card.id }, h('span', { class: 'main' }, h('span', { class: 't' }, `${x.text} (build)`), h('span', { class: 's' }, 'Build card, in no tote'))))
+  : toteRow(x.tote, x.what === 'card' ? `${x.text} (build)` : x.text, x.what === 'tote' ? homeLine(x.tote) : [x.tote.name, x.tote.place].filter(Boolean).join(' · '));
 function renderHome() {
   const list = totes();
   const order = SEASONS.map(s => s[0]).sort((a, b) => monthsUntil(a) - monthsUntil(b));
   const soon = comingDown(list), wait = ledger.notReady(...COLLS);
+  const seasons = h('div', { class: 'seasons' }, order.map(k => {
+    const in_ = list.filter(t => (t.season || 'other') === k);
+    return in_.length ? h('section', {}, h('h2', {}, seasonName(k)), h('ul', { class: 'list' }, in_.map(t => toteRow(t, t.name, homeLine(t))))) : null;
+  }));
+  const found = h('ul', { class: 'list found' });
+  const show = () => {
+    const q = query.trim(), hits = q ? findIn(q, totes(), builds()) : [];
+    seasons.hidden = !!q; found.hidden = !q;
+    mount(found, !q ? [] : hits.length ? hits.map(foundRow) : h('li', { class: 'empty' }, `No "${q}" in any tote.`));
+  };
+  const search = list.length || query ? h('input', { class: 'search', type: 'search', placeholder: 'Do I have…', value: query, 'aria-label': 'Search the totes', oninput: e => { query = e.target.value; show(); } }) : null;
+  show();
   return [
     soon ? h('div', { class: 'notice warn' }, h('p', {}, h('b', {}, soon.head), soon.text)) : null,
-    order.map(k => {
-      const in_ = list.filter(t => (t.season || 'other') === k);
-      return in_.length ? h('section', {}, h('h2', {}, seasonName(k)), h('ul', { class: 'list' }, in_.map(t =>
-        h('li', {}, h('a', { class: 'row', href: '#' + t.id },
-          h('span', { class: 'num' }, t.id),
-          h('span', { class: 'main' }, h('span', { class: 't' }, t.name), h('span', { class: 's' }, [t.place || 'No shelf yet', since(t)].filter(Boolean).join(' · '))),
-          isOut(t) ? h('span', { class: 'meta' }, h('span', { class: 'chip' }, 'out')) : null))))) : null;
-    }),
+    search, found, seasons,
     !list.length || wait ? h('p', { class: 'empty' }, wait || 'No totes yet.') : null,
     h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn', disabled: !!wait, onclick: fresh(() => editTote(null)) }, 'New tote'), h('a', { class: 'btn ghost', href: '#/builds' }, 'Build cards'),
       h('button', { type: 'button', class: 'btn ghost', disabled: !!wait, onclick: importFile }, 'Import')),

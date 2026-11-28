@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { monthsUntil, seasonName } from '../js/sample.js';
-import { isOut, comingDown, toteNames, tickKeys, checkImport, mergeImport } from '../js/totes.js';
+import { isOut, comingDown, toteNames, tickKeys, findIn, checkImport, mergeImport } from '../js/totes.js';
 
 test('months until a season comes round', () => {
   const nov = new Date(2026, 10, 26);
@@ -38,6 +38,23 @@ test('the season notice lists only the totes still put away, in words that fit h
 test('a tick stays on its thing when the list changes', () => {
   assert.deepEqual(tickKeys('04', ['Lights', 'Spare fuses', 'Lights']), ['04:Lights', '04:Spare fuses', '04:Lights#2']);
   assert.equal(tickKeys('04', ['Spare fuses', 'Timer'])[0], tickKeys('04', ['Lights', 'Spare fuses'])[1], 'line 1 taken out');
+});
+test('Do I have…: a tote by its name, its contents lines and its build cards, each under its tote, then cards in no tote', () => {
+  const totes = [
+    { id: '01', name: 'Porch lights', items: ['Light strings (4)', 'Spare fuses', 'Timer plug'], builds: ['sleigh', 'gone-card'] },
+    { id: '02', name: 'Christmas: windows', items: ['Window candles', 'Spare Fuses (big)'], builds: ['sleigh'] },
+    { id: '03', name: 'Fuse box spares', season: 'other' },
+  ];
+  const cards = [{ id: 'sleigh', name: 'Light-up sleigh' }, { id: 'relay', name: 'Spare relay board' }];
+  const show = q => findIn(q, totes, cards).map(x => `${x.tote ? x.tote.id : '--'} ${x.what}: ${x.text}`);
+  assert.deepEqual(show('spare fuses'), ['01 line: Spare fuses', '02 line: Spare Fuses (big)'], 'any case');
+  assert.deepEqual(show('fuse'), ['01 line: Spare fuses', '02 line: Spare Fuses (big)', '03 tote: Fuse box spares'], 'by tote number, the tote\'s name too');
+  assert.deepEqual(show('sleigh'), ['01 card: Light-up sleigh', '02 card: Light-up sleigh'], 'a card in two totes, under each');
+  assert.deepEqual(show('spare'), ['01 line: Spare fuses', '02 line: Spare Fuses (big)', '03 tote: Fuse box spares', '-- card: Spare relay board'], 'a card in no tote, last');
+  assert.deepEqual(show('christmas windows'), ['02 tote: Christmas: windows'], 'a colon in a name');
+  assert.deepEqual(show('lights fuses'), [], 'every word in one line or one name, not across a tote\'s name and a line');
+  assert.deepEqual(show('saffron'), []);
+  assert.deepEqual(findIn('timer', [{ id: '09', name: 'No lists' }], []), [], 'a tote with no contents or cards');
 });
 
 test('an import only fills in: contents, notes and a card typed at the tote stay, and a deleted tote stays deleted', () => {
